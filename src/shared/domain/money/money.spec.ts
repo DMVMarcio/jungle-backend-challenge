@@ -1,8 +1,38 @@
 import { describe, expect, it } from 'bun:test';
 
 import { Money } from './money';
+import { InvalidMoneyError } from './money.errors';
 
 describe('Money Value Object', () => {
+	describe('Creation & Validation', () => {
+		it('should create money with normalized currency and 2 decimal places', () => {
+			const money = Money.from({ amount: '25', currency: 'brl' });
+
+			expect(money.currency).toBe('BRL');
+			expect(money.toJSON()).toEqual({ amount: '25.00', currency: 'BRL' });
+		});
+
+		it('should create zero money with 0.00 amount', () => {
+			const zeroMoney = Money.zero('BRL');
+
+			expect(zeroMoney.toJSON()).toEqual({ amount: '0.00', currency: 'BRL' });
+		});
+
+		it('should reject invalid amount formats', () => {
+			const invalidAmounts = ['-10.00', '25.555', 'abc', '', '   ', '1e5', 'NaN', 'Infinity'];
+
+			for (const amount of invalidAmounts) {
+				expect(() => Money.from({ amount, currency: 'BRL' })).toThrow(InvalidMoneyError);
+			}
+		});
+
+		it('should reject missing or blank currency', () => {
+			expect(() => Money.from({ amount: '10.00', currency: '' })).toThrow(InvalidMoneyError);
+			expect(() => Money.from({ amount: '10.00', currency: '   ' })).toThrow(InvalidMoneyError);
+			expect(() => Money.zero('')).toThrow(InvalidMoneyError);
+		});
+	});
+
 	describe('Arithmetic', () => {
 		it('should add amounts correctly without floating-point errors', () => {
 			const firstMoney = Money.from({ amount: '0.10', currency: 'BRL' });
