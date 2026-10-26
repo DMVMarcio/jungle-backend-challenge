@@ -13,13 +13,13 @@ describe('Money Value Object', () => {
 			expect(result.toJSON().amount).toBe('0.30');
 		});
 
-		it('should subtract amounts correctly', () => {
-			const firstMoney = Money.from({ amount: '100.00', currency: 'BRL' });
-			const secondMoney = Money.from({ amount: '25.50', currency: 'BRL' });
+		it('should subtract amounts correctly without floating-point errors', () => {
+			const firstMoney = Money.from({ amount: '0.30', currency: 'BRL' });
+			const secondMoney = Money.from({ amount: '0.20', currency: 'BRL' });
 
 			const result = firstMoney.subtract(secondMoney);
 
-			expect(result.toJSON().amount).toBe('74.50');
+			expect(result.toJSON().amount).toBe('0.10');
 		});
 
 		it('should negate amount correctly', () => {
@@ -27,6 +27,16 @@ describe('Money Value Object', () => {
 			const negatedMoney = money.negate();
 
 			expect(negatedMoney.toJSON().amount).toBe('-50.00');
+		});
+
+		it('should guarantee immutability by not modifying original instances', () => {
+			const originalMoney = Money.from({ amount: '50.00', currency: 'BRL' });
+			const otherMoney = Money.from({ amount: '10.00', currency: 'BRL' });
+
+			const result = originalMoney.add(otherMoney);
+
+			expect(originalMoney.toJSON().amount).toBe('50.00');
+			expect(result).not.toBe(originalMoney);
 		});
 	});
 
