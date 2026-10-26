@@ -3,6 +3,33 @@ import { describe, expect, it } from 'bun:test';
 import { Money } from './money';
 
 describe('Money Value Object', () => {
+	describe('Arithmetic', () => {
+		it('should add amounts correctly without floating-point errors', () => {
+			const firstMoney = Money.from({ amount: '0.10', currency: 'BRL' });
+			const secondMoney = Money.from({ amount: '0.20', currency: 'BRL' });
+
+			const result = firstMoney.add(secondMoney);
+
+			expect(result.toJSON().amount).toBe('0.30');
+		});
+
+		it('should subtract amounts correctly', () => {
+			const firstMoney = Money.from({ amount: '100.00', currency: 'BRL' });
+			const secondMoney = Money.from({ amount: '25.50', currency: 'BRL' });
+
+			const result = firstMoney.subtract(secondMoney);
+
+			expect(result.toJSON().amount).toBe('74.50');
+		});
+
+		it('should negate amount correctly', () => {
+			const money = Money.from({ amount: '50.00', currency: 'BRL' });
+			const negatedMoney = money.negate();
+
+			expect(negatedMoney.toJSON().amount).toBe('-50.00');
+		});
+	});
+
 	describe('State', () => {
 		it('should correctly determine isZero()', () => {
 			const zeroMoney = Money.from({ amount: '0.00', currency: 'BRL' });
