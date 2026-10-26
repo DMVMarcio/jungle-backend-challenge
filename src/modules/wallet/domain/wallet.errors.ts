@@ -15,3 +15,11 @@ export class UnbalancedLedgerEntryError extends DomainError {
 		super(`Unbalanced ledger entry: ${reason}`);
 	}
 }
+
+export class InvalidInitialBalanceError extends DomainError {
+	readonly code = 'INVALID_INITIAL_BALANCE';
+
+	constructor(amount: string) {
+		super(`Initial balance cannot be negative, received: ${amount}`);
+	}
+}

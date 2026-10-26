@@ -2,7 +2,7 @@ import { Money } from '@/shared/domain/money/money';
 import { CurrencyMismatchError } from '@/shared/domain/money/money.errors';
 
 import { LedgerDirection, WalletLedgerEntry } from './wallet-ledger-entry';
-import { InsufficientFundsError } from './wallet.errors';
+import { InsufficientFundsError, InvalidInitialBalanceError } from './wallet.errors';
 
 export interface OpenWalletProps {
 	id?: string;
@@ -33,6 +33,8 @@ export class Wallet {
 	) {}
 
 	static open(props: OpenWalletProps): Wallet {
+		if (props.initialBalance.isNegative()) throw new InvalidInitialBalanceError(props.initialBalance.toString());
+
 		const createdAt = props.createdAt ?? new Date();
 
 		return new Wallet(
