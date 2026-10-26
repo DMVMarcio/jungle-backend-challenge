@@ -3,6 +3,41 @@ import { describe, expect, it } from 'bun:test';
 import { Money } from './money';
 
 describe('Money Value Object', () => {
+	describe('State', () => {
+		it('should correctly determine isZero()', () => {
+			const zeroMoney = Money.from({ amount: '0.00', currency: 'BRL' });
+
+			const positiveMoney = Money.from({ amount: '10.0', currency: 'BRL' });
+			const negativeMoney = positiveMoney.negate();
+
+			expect(zeroMoney.isZero()).toBe(true);
+			expect(positiveMoney.isZero()).toBe(false);
+			expect(negativeMoney.isZero()).toBe(false);
+		});
+
+		it('should correctly determine isPositive()', () => {
+			const zeroMoney = Money.zero('BRL');
+
+			const positiveMoney = Money.from({ amount: '10.0', currency: 'BRL' });
+			const negativeMoney = positiveMoney.negate();
+
+			expect(positiveMoney.isPositive()).toBe(true);
+			expect(zeroMoney.isPositive()).toBe(false);
+			expect(negativeMoney.isPositive()).toBe(false);
+		});
+
+		it('should correctly determine isNegative()', () => {
+			const zeroMoney = Money.zero('BRL');
+
+			const positiveMoney = Money.from({ amount: '10.0', currency: 'BRL' });
+			const negativeMoney = positiveMoney.negate();
+
+			expect(negativeMoney.isNegative()).toBe(true);
+			expect(zeroMoney.isNegative()).toBe(false);
+			expect(positiveMoney.isNegative()).toBe(false);
+		});
+	});
+
 	describe('Comparisons', () => {
 		it('should evaluate isLessThan correctly', () => {
 			const tenMoney = Money.from({ amount: '10.00', currency: 'BRL' });
@@ -22,7 +57,6 @@ describe('Money Value Object', () => {
 			const differentCurrency = Money.from({ amount: '50.00', currency: 'USD' });
 
 			expect(firstMoney.equals(sameFirstMoney)).toBe(true);
-
 			expect(firstMoney.equals(differentAmount)).toBe(false);
 			expect(firstMoney.equals(differentCurrency)).toBe(false);
 		});
