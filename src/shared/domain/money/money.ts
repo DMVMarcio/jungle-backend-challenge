@@ -52,6 +52,39 @@ export class Money {
 		return new Money(this.value.negated(), this.currency);
 	}
 
+	isZero(): boolean {
+		return this.value.isZero();
+	}
+
+	isPositive(): boolean {
+		return this.value.greaterThan(0);
+	}
+
+	isNegative(): boolean {
+		return this.value.lessThan(0);
+	}
+
+	isLessThan(other: Money): boolean {
+		this.assertSameCurrency(other);
+
+		return this.value.lessThan(other.value);
+	}
+
+	equals(other: Money): boolean {
+		return this.currency === other.currency && this.value.equals(other.value);
+	}
+
+	toJSON(): MoneyProps {
+		return {
+			amount: this.value.toFixed(2),
+			currency: this.currency
+		};
+	}
+
+	toString(): string {
+		return `${this.value.toFixed(2)} ${this.currency}`;
+	}
+
 	private assertSameCurrency(other: Money): void {
 		if (this.currency !== other.currency) throw new CurrencyMismatchError(this.currency, other.currency);
 	}
