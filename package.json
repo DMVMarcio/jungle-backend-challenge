@@ -1,0 +1,27 @@
+{
+	"name": "jungle-backend-challenge",
+	"module": "src/main.ts",
+	"type": "module",
+	"private": true,
+	"scripts": {
+		"dev": "bun --watch src/main.ts",
+		"typecheck": "tsc --noEmit"
+	},
+	"devDependencies": {
+		"@types/bun": "latest",
+		"@types/node": "^26.6.5",
+		"@zyrohub/config-prettier": "^1.0.8",
+		"typescript": "^7.0.2"
+	},
+	"peerDependencies": {
+		"typescript": "^7"
+	},
+	"dependencies": {
+		"@nestjs/common": "^12.2.0",
+		"@nestjs/core": "^12.2.0",
+		"@nestjs/platform-fastify": "^12.2.0",
+		"fastify": "^5.12.7",
+		"reflect-metadata": "^0.2.2",
+		"rxjs": "^7.8.2"
+	}
+}
