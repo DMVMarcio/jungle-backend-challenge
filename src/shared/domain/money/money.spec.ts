@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'bun:test';
 
 import { Money } from './money';
-import { InvalidMoneyError } from './money.errors';
+import { CurrencyMismatchError, InvalidMoneyError } from './money.errors';
 
 describe('Money Value Object', () => {
 	describe('Creation & Validation', () => {
@@ -126,6 +126,36 @@ describe('Money Value Object', () => {
 			expect(firstMoney.equals(sameFirstMoney)).toBe(true);
 			expect(firstMoney.equals(differentAmount)).toBe(false);
 			expect(firstMoney.equals(differentCurrency)).toBe(false);
+		});
+	});
+
+	describe('Currency Invariants', () => {
+		it('should throw CurrencyMismatchError when adding different currencies', () => {
+			const brlMoney = Money.from({ amount: '10.00', currency: 'BRL' });
+			const usdMoney = Money.from({ amount: '10.00', currency: 'USD' });
+
+			expect(() => brlMoney.add(usdMoney)).toThrow(CurrencyMismatchError);
+		});
+
+		it('should throw CurrencyMismatchError when subtracting different currencies', () => {
+			const brlMoney = Money.from({ amount: '10.00', currency: 'BRL' });
+			const usdMoney = Money.from({ amount: '5.00', currency: 'USD' });
+
+			expect(() => brlMoney.subtract(usdMoney)).toThrow(CurrencyMismatchError);
+		});
+
+		it('should throw CurrencyMismatchError when comparing with isLessThan across currencies', () => {
+			const brlMoney = Money.from({ amount: '10.00', currency: 'BRL' });
+			const usdMoney = Money.from({ amount: '20.00', currency: 'USD' });
+
+			expect(() => brlMoney.isLessThan(usdMoney)).toThrow(CurrencyMismatchError);
+		});
+
+		it('should return false when comparing equals with different currencies', () => {
+			const brlMoney = Money.from({ amount: '10.00', currency: 'BRL' });
+			const usdMoney = Money.from({ amount: '10.00', currency: 'USD' });
+
+			expect(brlMoney.equals(usdMoney)).toBe(false);
 		});
 	});
 
