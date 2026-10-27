@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Post, Query, UsePipes } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query, UsePipes } from '@nestjs/common';
 
 import { CreateWalletUseCase } from '@/modules/wallet/application/use-cases/create-wallet.use-case';
 import { GetWalletLedgerUseCase } from '@/modules/wallet/application/use-cases/get-wallet-ledger.use-case';
@@ -8,6 +8,7 @@ import { ZodValidationPipe } from '@/shared/presentation/http/pipes/zod-validati
 
 import { type CreateWalletDto, createWalletSchema } from './dto/create-wallet.dto';
 import { type GetWalletLedgerQueryDto, getWalletLedgerQuerySchema } from './dto/get-wallet-ledger.dto';
+import { type WalletParamsDto, walletParamsSchema } from './dto/wallet-params.dto';
 
 @Controller('wallets')
 export class WalletController {
@@ -25,13 +26,13 @@ export class WalletController {
 	}
 
 	@Get(':walletId')
-	async findById(@Param('walletId', new ParseUUIDPipe()) walletId: string) {
+	async findById(@Param(new ZodValidationPipe(walletParamsSchema)) { walletId }: WalletParamsDto) {
 		return this.getWalletUseCase.execute({ walletId });
 	}
 
 	@Get(':walletId/ledger')
 	async getLedger(
-		@Param('walletId', new ParseUUIDPipe()) walletId: string,
+		@Param(new ZodValidationPipe(walletParamsSchema)) { walletId }: WalletParamsDto,
 		@Query(new ZodValidationPipe(getWalletLedgerQuerySchema)) query: GetWalletLedgerQueryDto
 	) {
 		return this.getWalletLedgerUseCase.execute({
@@ -42,7 +43,7 @@ export class WalletController {
 	}
 
 	@Post(':walletId/reconciliation')
-	async reconcile(@Param('walletId', new ParseUUIDPipe()) walletId: string) {
+	async reconcile(@Param(new ZodValidationPipe(walletParamsSchema)) { walletId }: WalletParamsDto) {
 		return this.reconcileWalletUseCase.execute({ walletId });
 	}
 }
