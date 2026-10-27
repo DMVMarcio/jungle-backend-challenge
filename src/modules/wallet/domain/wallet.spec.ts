@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'bun:test';
 
 import { Money } from '@/shared/domain/money/money';
+import { CurrencyMismatchError } from '@/shared/domain/money/money.errors';
 
 import { Wallet } from './wallet';
 import { LedgerDirection, WalletLedgerEntry } from './wallet-ledger-entry';
@@ -90,6 +91,31 @@ describe('Wallet Aggregate Root & Ledger', () => {
 
 			expect(wallet.balance.toJSON().amount).toBe('50.00');
 			expect(wallet.version).toBe(1);
+		});
+	});
+
+	describe('Currency Guards', () => {
+		it('should throw CurrencyMismatchError when trying to credit a different currency', () => {
+			const wallet = Wallet.open({
+				playerId,
+				initialBalance: Money.from({ amount: '100.00', currency: 'BRL' })
+			});
+
+			const usdMoney = Money.from({ amount: '10.00', currency: 'USD' });
+
+			expect(() => wallet.credit(usdMoney, 'tx-cross-currency')).toThrow(CurrencyMismatchError);
+			expect(wallet.balance.toJSON().amount).toBe('100.00');
+		});
+
+		it('should throw CurrencyMismatchError when trying to debit a different currency', () => {
+			const wallet = Wallet.open({
+				playerId,
+				initialBalance: Money.from({ amount: '100.00', currency: 'BRL' })
+			});
+
+			const usdMoney = Money.from({ amount: '10.00', currency: 'USD' });
+
+			expect(() => wallet.debit(usdMoney, 'tx-cross-currency')).toThrow(CurrencyMismatchError);
 		});
 	});
 
