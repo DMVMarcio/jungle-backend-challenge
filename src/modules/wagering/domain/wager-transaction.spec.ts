@@ -24,6 +24,61 @@ describe('WagerTransaction', () => {
 		money: Money.from({ amount: '25.00', currency: 'BRL' })
 	};
 
+	describe('Creation & Validation', () => {
+		it('should create a valid BET transaction in PENDING status', () => {
+			const transaction = WagerTransaction.create({
+				...baseProps,
+
+				kind: WagerTransactionKind.Bet
+			});
+
+			expect(transaction.status).toBe(WagerTransactionStatus.Pending);
+			expect(transaction.isTerminal()).toBe(false);
+			expect(transaction.affectsBalance()).toBe(true);
+			expect(transaction.id).toBeDefined();
+		});
+
+		it('should identify LOSS as not affecting balance', () => {
+			const tx = WagerTransaction.create({
+				...baseProps,
+
+				kind: WagerTransactionKind.Loss
+			});
+			expect(tx.affectsBalance()).toBe(false);
+		});
+
+		it('should throw MissingReferenceTransactionError when REFUND or ROLLBACK is created without reference', () => {
+			expect(() =>
+				WagerTransaction.create({
+					...baseProps,
+
+					kind: WagerTransactionKind.Refund
+				})
+			).toThrow(MissingReferenceTransactionError);
+
+			expect(() =>
+				WagerTransaction.create({
+					...baseProps,
+
+					kind: WagerTransactionKind.Rollback,
+					referenceExternalTransactionId: '   '
+				})
+			).toThrow(MissingReferenceTransactionError);
+		});
+
+		it('should create REFUND when reference is provided', () => {
+			const transaction = WagerTransaction.create({
+				...baseProps,
+
+				kind: WagerTransactionKind.Refund,
+				referenceExternalTransactionId: 'original-bet-tx'
+			});
+
+			expect(transaction.referenceExternalTransactionId).toBe('original-bet-tx');
+			expect(transaction.requiresReference()).toBe(true);
+		});
+	});
+
 	describe('State Transitions & Terminal Invariants', () => {
 		it('should transition to PROCESSED and set processedAt', () => {
 			const transaction = WagerTransaction.create({ ...baseProps, kind: WagerTransactionKind.Bet });
@@ -106,6 +161,7 @@ describe('WagerTransaction', () => {
 			const winTransaction = WagerTransaction.create({ ...baseProps, kind: WagerTransactionKind.Win });
 			const refundTransaction = WagerTransaction.create({
 				...baseProps,
+
 				kind: WagerTransactionKind.Refund,
 				referenceExternalTransactionId: 'tx-1'
 			});
@@ -120,12 +176,14 @@ describe('WagerTransaction', () => {
 
 			const rollbackBet = WagerTransaction.create({
 				...baseProps,
+
 				kind: WagerTransactionKind.Rollback,
 				referenceExternalTransactionId: 'tx-bet'
 			});
 
 			const rollbackWin = WagerTransaction.create({
 				...baseProps,
+
 				kind: WagerTransactionKind.Rollback,
 				referenceExternalTransactionId: 'tx-win'
 			});
@@ -138,6 +196,7 @@ describe('WagerTransaction', () => {
 			const lossTransaction = WagerTransaction.create({ ...baseProps, kind: WagerTransactionKind.Loss });
 			const rollbackTransaction = WagerTransaction.create({
 				...baseProps,
+
 				kind: WagerTransactionKind.Rollback,
 				referenceExternalTransactionId: 'tx-ref'
 			});
