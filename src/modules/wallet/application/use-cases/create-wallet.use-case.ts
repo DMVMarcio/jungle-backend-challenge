@@ -2,16 +2,16 @@ import { EntityManager } from '@mikro-orm/postgresql';
 import { Inject, Injectable } from '@nestjs/common';
 
 import { WagerTransaction, WagerTransactionKind } from '@/modules/wagering/domain/wager-transaction';
-import { IWagerTransactionRepository } from '@/modules/wagering/domain/wager-transaction.repository.interface';
+import type { IWagerTransactionRepository } from '@/modules/wagering/domain/wager-transaction.repository.interface';
 import { WAGERING_TOKENS } from '@/modules/wagering/wagering.tokens';
 import { Wallet } from '@/modules/wallet/domain/wallet';
 import { LedgerDirection, WalletLedgerEntry } from '@/modules/wallet/domain/wallet-ledger-entry';
 import { WalletAlreadyExistsError } from '@/modules/wallet/domain/wallet.errors';
-import { IWalletRepository } from '@/modules/wallet/domain/wallet.repository.interface';
+import type { IWalletRepository } from '@/modules/wallet/domain/wallet.repository.interface';
 import { WALLET_TOKENS } from '@/modules/wallet/wallet.tokens';
 
 import { Money } from '@/shared/domain/money/money';
-import { IIdGenerator } from '@/shared/ports/id-generator.port';
+import type { IIdGenerator } from '@/shared/ports/id-generator.port';
 import { SHARED_TOKENS } from '@/shared/shared.tokens';
 
 export interface CreateWalletUseCaseInput {
