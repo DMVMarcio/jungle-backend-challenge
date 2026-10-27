@@ -8,6 +8,7 @@
 		"typecheck": "tsc --noEmit"
 	},
 	"devDependencies": {
+		"@mikro-orm/cli": "^7.2.5",
 		"@types/bun": "latest",
 		"@types/node": "^26.6.5",
 		"@zyrohub/config-prettier": "^1.0.8",
@@ -17,6 +18,10 @@
 		"typescript": "^7"
 	},
 	"dependencies": {
+		"@mikro-orm/core": "^7.2.5",
+		"@mikro-orm/migrations": "^7.2.5",
+		"@mikro-orm/nestjs": "^7.1.0",
+		"@mikro-orm/postgresql": "^7.2.5",
 		"@nestjs/common": "^12.2.0",
 		"@nestjs/core": "^12.2.0",
 		"@nestjs/platform-fastify": "^12.2.0",
