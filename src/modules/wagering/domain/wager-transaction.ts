@@ -1,6 +1,6 @@
 import { Money } from '@/shared/domain/money/money';
 
-import { MissingReferenceTransactionError } from './wagering.errors';
+import { InvalidTransactionStateError, MissingReferenceTransactionError } from './wagering.errors';
 
 export enum WagerTransactionKind {
 	Opening = 'OPENING',
@@ -148,5 +148,47 @@ export class WagerTransaction {
 
 	get processedAt(): Date | undefined {
 		return this._processedAt;
+	}
+
+	markProcessed(referenceTransactionId?: string, at: Date = new Date()): void {
+		this.assertNotTerminal('markProcessed');
+
+		this._status = WagerTransactionStatus.Processed;
+		this._referenceTransactionId = referenceTransactionId;
+		this._processedAt = at;
+	}
+
+	markPendingReference(): void {
+		this.assertNotTerminal('markPendingReference');
+
+		this._status = WagerTransactionStatus.PendingReference;
+	}
+
+	reject(code: FailureCode): void {
+		this.assertNotTerminal('reject');
+
+		this._status = WagerTransactionStatus.Rejected;
+		this._failureCode = code;
+		this._processedAt = new Date();
+	}
+
+	fail(code: FailureCode): void {
+		this.assertNotTerminal('fail');
+
+		this._status = WagerTransactionStatus.Failed;
+		this._failureCode = code;
+		this._processedAt = new Date();
+	}
+
+	isTerminal(): boolean {
+		return (
+			this._status === WagerTransactionStatus.Processed ||
+			this._status === WagerTransactionStatus.Rejected ||
+			this._status === WagerTransactionStatus.Failed
+		);
+	}
+
+	private assertNotTerminal(action: string): void {
+		if (this.isTerminal()) throw new InvalidTransactionStateError(this._status, action);
 	}
 }
