@@ -1,6 +1,6 @@
-import { DomainError } from '@/shared/domain/errors';
+import { BusinessRuleError, ConflictError } from '@/shared/domain/errors';
 
-export class InvalidTransactionStateError extends DomainError {
+export class InvalidTransactionStateError extends ConflictError {
 	readonly code = 'INVALID_TRANSACTION_STATE';
 
 	constructor(current_status: string, action: string) {
@@ -8,7 +8,7 @@ export class InvalidTransactionStateError extends DomainError {
 	}
 }
 
-export class MissingReferenceTransactionError extends DomainError {
+export class MissingReferenceTransactionError extends BusinessRuleError {
 	readonly code = 'MISSING_REFERENCE_TRANSACTION';
 
 	constructor(kind: string) {
@@ -16,7 +16,7 @@ export class MissingReferenceTransactionError extends DomainError {
 	}
 }
 
-export class InvalidTransactionOperationError extends DomainError {
+export class InvalidTransactionOperationError extends BusinessRuleError {
 	readonly code = 'INVALID_TRANSACTION_OPERATION';
 
 	constructor(reason: string) {

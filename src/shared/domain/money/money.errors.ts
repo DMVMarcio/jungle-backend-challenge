@@ -1,6 +1,6 @@
-import { DomainError } from '../errors';
+import { BusinessRuleError, ValidationError } from '../errors';
 
-export class InvalidMoneyError extends DomainError {
+export class InvalidMoneyError extends ValidationError {
 	readonly code = 'INVALID_MONEY';
 
 	constructor(reason: string) {
@@ -8,7 +8,7 @@ export class InvalidMoneyError extends DomainError {
 	}
 }
 
-export class CurrencyMismatchError extends DomainError {
+export class CurrencyMismatchError extends BusinessRuleError {
 	readonly code = 'CURRENCY_MISMATCH';
 
 	constructor(expected: string, received: string) {
