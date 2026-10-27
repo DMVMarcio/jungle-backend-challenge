@@ -30,3 +30,10 @@ export class WalletAlreadyExistsError extends DomainError {
 		super(`Wallet already exists for player ${playerId} with currency ${currency}`);
 	}
 }
+
+export class WalletNotFoundError extends DomainError {
+	readonly code = 'WALLET_NOT_FOUND';
+	constructor(walletId: string) {
+		super(`Wallet with id ${walletId} not found`);
+	}
+}
