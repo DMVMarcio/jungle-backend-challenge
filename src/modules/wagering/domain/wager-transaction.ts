@@ -66,6 +66,12 @@ export interface WagerTransactionState {
 }
 
 export class WagerTransaction {
+	static readonly TERMINAL_STATUSES: ReadonlySet<WagerTransactionStatus> = new Set([
+		WagerTransactionStatus.Processed,
+		WagerTransactionStatus.Rejected,
+		WagerTransactionStatus.Failed
+	]);
+
 	private constructor(
 		public readonly id: string,
 		public readonly providerId: string,
@@ -181,11 +187,7 @@ export class WagerTransaction {
 	}
 
 	isTerminal(): boolean {
-		return (
-			this._status === WagerTransactionStatus.Processed ||
-			this._status === WagerTransactionStatus.Rejected ||
-			this._status === WagerTransactionStatus.Failed
-		);
+		return WagerTransaction.TERMINAL_STATUSES.has(this._status);
 	}
 
 	private assertNotTerminal(action: string): void {
