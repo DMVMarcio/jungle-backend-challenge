@@ -3,8 +3,8 @@ import { describe, expect, it } from 'bun:test';
 import { Money } from '@/shared/domain/money/money';
 
 import { Wallet } from './wallet';
-import { LedgerDirection } from './wallet-ledger-entry';
-import { InsufficientFundsError, InvalidInitialBalanceError } from './wallet.errors';
+import { LedgerDirection, WalletLedgerEntry } from './wallet-ledger-entry';
+import { InsufficientFundsError, InvalidInitialBalanceError, UnbalancedLedgerEntryError } from './wallet.errors';
 
 describe('Wallet Aggregate Root & Ledger', () => {
 	const playerId = 'player-123';
@@ -90,6 +90,21 @@ describe('Wallet Aggregate Root & Ledger', () => {
 
 			expect(wallet.balance.toJSON().amount).toBe('50.00');
 			expect(wallet.version).toBe(1);
+		});
+	});
+
+	describe('WalletLedgerEntry Integrity', () => {
+		it('should reject creation of unbalanced ledger entries', () => {
+			expect(() =>
+				WalletLedgerEntry.create({
+					walletId: 'w-1',
+					transactionId: 'tx-unbalanced',
+					direction: LedgerDirection.Credit,
+					money: Money.from({ amount: '20.00', currency: 'BRL' }),
+					balanceBefore: Money.from({ amount: '100.00', currency: 'BRL' }),
+					balanceAfter: Money.from({ amount: '150.00', currency: 'BRL' })
+				})
+			).toThrow(UnbalancedLedgerEntryError);
 		});
 	});
 });
