@@ -105,7 +105,7 @@ export class WagerTransaction {
 	) {}
 
 	static create(props: CreateWagerTransactionProps): WagerTransaction {
-		const isReferenceRequired = WagerTransaction.REFERENCE_REQUIRED_KINDS.has(props.kind);
+		const isReferenceRequired = WagerTransaction.requiresReference(props.kind);
 
 		if (isReferenceRequired && !props.referenceExternalTransactionId?.trim())
 			throw new MissingReferenceTransactionError(props.kind);
@@ -205,7 +205,7 @@ export class WagerTransaction {
 	}
 
 	requiresReference(): boolean {
-		return WagerTransaction.REFERENCE_REQUIRED_KINDS.has(this.kind);
+		return WagerTransaction.requiresReference(this.kind);
 	}
 
 	matchesPayload(payloadHash: string): boolean {
@@ -233,5 +233,9 @@ export class WagerTransaction {
 
 	private assertNotTerminal(action: string): void {
 		if (this.isTerminal()) throw new InvalidTransactionStateError(this._status, action);
+	}
+
+	static requiresReference(kind: WagerTransactionKind): boolean {
+		return WagerTransaction.REFERENCE_REQUIRED_KINDS.has(kind);
 	}
 }
