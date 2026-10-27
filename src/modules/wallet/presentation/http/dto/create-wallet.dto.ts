@@ -6,4 +6,5 @@ export const createWalletSchema = z.object({
 	playerId: z.uuid(),
 	initialBalance: moneySchema
 });
+
 export type CreateWalletDto = z.infer<typeof createWalletSchema>;
