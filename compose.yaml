@@ -1,0 +1,54 @@
+services:
+    postgres:
+        image: postgres:17-alpine
+        container_name: jungle_postgres
+        restart: always
+        environment:
+            POSTGRES_USER: jungle
+            POSTGRES_PASSWORD: jungle
+            POSTGRES_DB: jungle_db
+        ports:
+            - '5432:5432'
+        volumes:
+            - postgres_data:/var/lib/postgresql/data
+        healthcheck:
+            test: ['CMD-SHELL', 'pg_isready -U jungle -d jungle_db']
+            interval: 5s
+            timeout: 5s
+            retries: 5
+
+    localstack:
+        image: localstack/localstack:latest
+        container_name: jungle_localstack
+        ports:
+            - '4566:4566'
+        environment:
+            - SERVICES=sqs
+            - AWS_DEFAULT_REGION=us-east-1
+        volumes:
+            - localstack_data:/var/lib/localstack
+            - '/var/run/docker.sock:/var/run/docker.sock'
+
+    localstack-init:
+        image: amazon/aws-cli:latest
+        container_name: jungle_localstack_init
+        depends_on:
+            - localstack
+        environment:
+            - AWS_ACCESS_KEY_ID=test
+            - AWS_SECRET_ACCESS_KEY=test
+            - AWS_DEFAULT_REGION=us-east-1
+        entrypoint: /bin/sh
+        command: >
+            -c "
+              echo 'Waiting LocalStack...'
+              sleep 3
+              echo 'Creating SQS FIFO queues...'
+              aws --endpoint-url=http://localstack:4566 sqs create-queue --queue-name wager-transactions-dlq.fifo --attributes FifoQueue=true,ContentBasedDeduplication=true
+              aws --endpoint-url=http://localstack:4566 sqs create-queue --queue-name wager-transactions.fifo --attributes FifoQueue=true,ContentBasedDeduplication=true
+              echo 'Successfully created SQS FIFO queues!'
+            "
+
+volumes:
+    postgres_data:
+    localstack_data:
