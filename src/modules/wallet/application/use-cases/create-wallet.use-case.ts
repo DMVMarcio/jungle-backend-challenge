@@ -10,8 +10,8 @@ import { WalletAlreadyExistsError } from '@/modules/wallet/domain/wallet.errors'
 import { IWalletRepository } from '@/modules/wallet/domain/wallet.repository.interface';
 import { WALLET_TOKENS } from '@/modules/wallet/wallet.tokens';
 
-import { IIdGenerator } from '@/shared/application/providers/id-generator.interface';
 import { Money } from '@/shared/domain/money/money';
+import { IIdGenerator } from '@/shared/ports/id-generator.port';
 import { SHARED_TOKENS } from '@/shared/shared.tokens';
 
 export interface CreateWalletUseCaseInput {
@@ -57,6 +57,7 @@ export class CreateWalletUseCase {
 		if (existingWallet) throw new WalletAlreadyExistsError(input.playerId, initialMoney.currency);
 
 		const wallet = Wallet.open({
+			id: this.idGenerator.generate(),
 			playerId: input.playerId,
 			initialBalance: initialMoney
 		});
@@ -65,6 +66,7 @@ export class CreateWalletUseCase {
 			const openingTransactionId = this.idGenerator.generate();
 
 			const ledgerEntry = WalletLedgerEntry.create({
+				id: this.idGenerator.generate(),
 				walletId: wallet.id,
 				transactionId: openingTransactionId,
 				direction: LedgerDirection.Credit,

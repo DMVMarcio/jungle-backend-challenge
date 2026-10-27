@@ -1,18 +1,19 @@
 import { Injectable } from '@nestjs/common';
 import { createHash } from 'node:crypto';
 
-import { IPayloadHasher } from '@/shared/application/providers/payload-hasher.interface';
+import { IPayloadHasher } from '@/shared/ports/payload-hasher.port';
 
 @Injectable()
-export class Sha256PayloadHasher implements IPayloadHasher {
-	hash(data: unknown): string {
-		const serialized = this.normalize(data);
+export class PayloadHasherSha256Adapter implements IPayloadHasher {
+	hash(payload: unknown): string {
+		const normalized = this.normalize(payload);
 
-		return createHash('sha256').update(serialized).digest('hex');
+		return createHash('sha256').update(normalized).digest('hex');
 	}
 
 	private normalize(data: unknown): string {
 		if (data === null || typeof data !== 'object') return JSON.stringify(data);
+
 		if (Array.isArray(data)) return `[${data.map(item => this.normalize(item)).join(',')}]`;
 
 		const obj = data as Record<string, unknown>;

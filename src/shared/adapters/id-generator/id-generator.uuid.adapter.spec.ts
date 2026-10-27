@@ -1,12 +1,12 @@
 import { beforeEach, describe, expect, it } from 'bun:test';
 
-import { UuidGenerator } from './uuid-generator';
+import { IdGeneratorUuidAdapter } from './id-generator.uuid.adapter';
 
-describe('Uuid Generator', () => {
-	let sut: UuidGenerator;
+describe('Id Generator Uuid Adapter', () => {
+	let sut: IdGeneratorUuidAdapter;
 
 	beforeEach(() => {
-		sut = new UuidGenerator();
+		sut = new IdGeneratorUuidAdapter();
 	});
 
 	it('should generate a valid UUID v4 string', () => {

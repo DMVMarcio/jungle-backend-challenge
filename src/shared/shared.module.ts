@@ -1,7 +1,7 @@
 import { Global, Module } from '@nestjs/common';
 
-import { Sha256PayloadHasher } from './infrastructure/providers/sha256-payload-hasher';
-import { UuidGenerator } from './infrastructure/providers/uuid-generator';
+import { IdGeneratorUuidAdapter } from './adapters/id-generator/id-generator.uuid.adapter';
+import { PayloadHasherSha256Adapter } from './adapters/payload-hasher/payload-hasher.sha256.adapter';
 import { SHARED_TOKENS } from './shared.tokens';
 
 @Global()
@@ -9,11 +9,11 @@ import { SHARED_TOKENS } from './shared.tokens';
 	providers: [
 		{
 			provide: SHARED_TOKENS.ID_GENERATOR,
-			useClass: UuidGenerator
+			useClass: IdGeneratorUuidAdapter
 		},
 		{
 			provide: SHARED_TOKENS.PAYLOAD_HASHER,
-			useClass: Sha256PayloadHasher
+			useClass: PayloadHasherSha256Adapter
 		}
 	],
 	exports: [SHARED_TOKENS.ID_GENERATOR, SHARED_TOKENS.PAYLOAD_HASHER]

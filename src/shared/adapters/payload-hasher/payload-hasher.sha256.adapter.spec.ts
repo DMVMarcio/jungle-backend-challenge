@@ -1,12 +1,12 @@
 import { beforeEach, describe, expect, it } from 'bun:test';
 
-import { Sha256PayloadHasher } from './sha256-payload-hasher';
+import { PayloadHasherSha256Adapter } from './payload-hasher.sha256.adapter';
 
-describe('Sha256 Payload Hasher', () => {
-	let sut: Sha256PayloadHasher;
+describe('Payload Hasher Sha256 Adapter', () => {
+	let sut: PayloadHasherSha256Adapter;
 
 	beforeEach(() => {
-		sut = new Sha256PayloadHasher();
+		sut = new PayloadHasherSha256Adapter();
 	});
 
 	it('should produce the same hash for objects with differently ordered keys', () => {
