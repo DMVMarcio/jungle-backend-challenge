@@ -14,7 +14,9 @@ import { WALLET_TOKENS } from './wallet.tokens';
 		{
 			provide: WALLET_TOKENS.REPOSITORY,
 			useClass: WalletMikroOrmRepository
-		}
+		},
+		CreateWalletUseCase,
+		GetWalletUseCase
 	],
 	exports: [WALLET_TOKENS.REPOSITORY, CreateWalletUseCase, GetWalletUseCase]
 })

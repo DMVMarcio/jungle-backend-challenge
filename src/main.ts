@@ -9,11 +9,14 @@ import { settings } from '@/core/settings';
 
 import { AppModule } from './app.module';
 import { Logger } from '@nestjs/common';
+import { DomainExceptionFilter } from './shared/presentation/http/filters/domain-exception.filter';
 
 const bootstrap = async () => {
 	const logger = new Logger('Bootstrap');
 
 	const app = await NestFactory.create<NestFastifyApplication>(AppModule, new FastifyAdapter());
+
+	app.useGlobalFilters(new DomainExceptionFilter());
 
 	await app.listen({ port: settings.server.port, host: settings.server.host });
 
