@@ -65,4 +65,26 @@ export class OutboxMessage {
 	get publishedAt(): Date | undefined {
 		return this._publishedAt;
 	}
+
+	isPending(): boolean {
+		return this._publishedAt === undefined;
+	}
+
+	isDue(now: Date = new Date()): boolean {
+		if (!this.isPending()) return false;
+		if (!this._nextAttemptAt) return true;
+
+		return this._nextAttemptAt <= now;
+	}
+
+	markPublished(at: Date = new Date()): void {
+		this._publishedAt = at;
+	}
+
+	scheduleRetry(now: Date = new Date()): void {
+		this._attempts += 1;
+
+		const delaySeconds = Math.min(300, Math.pow(2, this._attempts));
+		this._nextAttemptAt = new Date(now.getTime() + delaySeconds * 1000);
+	}
 }
