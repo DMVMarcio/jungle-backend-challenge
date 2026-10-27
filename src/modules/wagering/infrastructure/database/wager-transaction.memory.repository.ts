@@ -1,6 +1,10 @@
 import { Injectable } from '@nestjs/common';
 
-import { WagerTransaction, WagerTransactionStatus } from '@/modules/wagering/domain/wager-transaction';
+import {
+	WagerTransaction,
+	WagerTransactionKind,
+	WagerTransactionStatus
+} from '@/modules/wagering/domain/wager-transaction';
 import { IWagerTransactionRepository } from '@/modules/wagering/domain/wager-transaction.repository.interface';
 
 @Injectable()
@@ -22,6 +26,20 @@ export class WagerTransactionMemoryRepository implements IWagerTransactionReposi
 		return (
 			this.items.find(
 				item => item.providerId === providerId && item.externalTransactionId === externalTransactionId
+			) ?? null
+		);
+	}
+
+	async findProcessedByReferenceId(
+		referenceTransactionId: string,
+		kind?: WagerTransactionKind
+	): Promise<WagerTransaction | null> {
+		return (
+			this.items.find(
+				item =>
+					item.referenceTransactionId === referenceTransactionId &&
+					item.status === WagerTransactionStatus.Processed &&
+					(!kind || item.kind === kind)
 			) ?? null
 		);
 	}

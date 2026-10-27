@@ -1,7 +1,11 @@
 import { EntityManager } from '@mikro-orm/postgresql';
 import { Injectable } from '@nestjs/common';
 
-import { WagerTransaction, WagerTransactionStatus } from '@/modules/wagering/domain/wager-transaction';
+import {
+	WagerTransaction,
+	WagerTransactionKind,
+	WagerTransactionStatus
+} from '@/modules/wagering/domain/wager-transaction';
 import { IWagerTransactionRepository } from '@/modules/wagering/domain/wager-transaction.repository.interface';
 
 import { WagerTransactionMapper } from './wager-transaction.mapper';
@@ -33,6 +37,22 @@ export class WagerTransactionMikroOrmRepository implements IWagerTransactionRepo
 			providerId,
 			externalTransactionId
 		});
+		if (!record) return null;
+
+		return WagerTransactionMapper.toDomain(record);
+	}
+
+	async findProcessedByReferenceId(
+		referenceTransactionId: string,
+		kind?: WagerTransactionKind
+	): Promise<WagerTransaction | null> {
+		const whereClause: Record<string, any> = {
+			referenceTransactionId,
+			status: WagerTransactionStatus.Processed
+		};
+		if (kind) whereClause.kind = kind;
+
+		const record = await this.entityManager.findOne(WagerTransactionSchema, whereClause);
 		if (!record) return null;
 
 		return WagerTransactionMapper.toDomain(record);
