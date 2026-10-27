@@ -2,11 +2,8 @@ import { EntityManager, LockMode } from '@mikro-orm/postgresql';
 import { Injectable } from '@nestjs/common';
 
 import { Wallet } from '@/modules/wallet/domain/wallet';
-import { WalletLedgerEntry } from '@/modules/wallet/domain/wallet-ledger-entry';
 import { IWalletRepository } from '@/modules/wallet/domain/wallet.repository.interface';
 
-import { WalletLedgerEntryMapper } from './wallet-ledger-entry.mapper';
-import { WalletLedgerEntrySchema } from './wallet-ledger-entry.schema';
 import { WalletMapper } from './wallet.mapper';
 import { WalletSchema } from './wallet.schema';
 
@@ -35,34 +32,19 @@ export class WalletMikroOrmRepository implements IWalletRepository {
 		return WalletMapper.toDomain(record);
 	}
 
-	async create(wallet: Wallet, ledgerEntry?: WalletLedgerEntry): Promise<void> {
+	async create(wallet: Wallet): Promise<void> {
 		const walletRecord = this.entityManager.create(WalletSchema, WalletMapper.toPersistence(wallet));
 		this.entityManager.persist(walletRecord);
-
-		if (ledgerEntry) {
-			const ledgerRecord = this.entityManager.create(
-				WalletLedgerEntrySchema,
-				WalletLedgerEntryMapper.toPersistence(ledgerEntry)
-			);
-
-			this.entityManager.persist(ledgerRecord);
-		}
 
 		await this.entityManager.flush();
 	}
 
-	async update(wallet: Wallet, ledgerEntry: WalletLedgerEntry): Promise<void> {
+	async update(wallet: Wallet): Promise<void> {
 		const persistenceData = WalletMapper.toPersistence(wallet);
 		const record = await this.entityManager.findOne(WalletSchema, { id: wallet.id });
 
 		if (record) this.entityManager.assign(record, persistenceData);
 
-		const ledgerRecord = this.entityManager.create(
-			WalletLedgerEntrySchema,
-			WalletLedgerEntryMapper.toPersistence(ledgerEntry)
-		);
-
-		this.entityManager.persist(ledgerRecord);
 		await this.entityManager.flush();
 	}
 }

@@ -8,6 +8,7 @@ import { IdGeneratorUuidAdapter } from '@/shared/adapters/id-generator/id-genera
 
 import { LedgerDirection } from '../../domain/wallet-ledger-entry';
 import { WalletAlreadyExistsError } from '../../domain/wallet.errors';
+import { WalletLedgerEntryMemoryRepository } from '../../infrastructure/database/wallet-ledger-entry.memory.repository';
 import { WalletMemoryRepository } from '../../infrastructure/database/wallet.memory.repository';
 import { CreateWalletUseCase } from './create-wallet.use-case';
 
@@ -15,6 +16,7 @@ describe('Create Wallet UseCase', () => {
 	let sut: CreateWalletUseCase;
 
 	let walletRepository: WalletMemoryRepository;
+	let ledgerRepository: WalletLedgerEntryMemoryRepository;
 	let wageringRepository: WagerTransactionMemoryRepository;
 
 	let idGenerator: IdGeneratorUuidAdapter;
@@ -22,6 +24,7 @@ describe('Create Wallet UseCase', () => {
 
 	beforeEach(() => {
 		walletRepository = new WalletMemoryRepository();
+		ledgerRepository = new WalletLedgerEntryMemoryRepository();
 		wageringRepository = new WagerTransactionMemoryRepository();
 
 		idGenerator = new IdGeneratorUuidAdapter();
@@ -30,7 +33,13 @@ describe('Create Wallet UseCase', () => {
 			transactional: async (cb: (em: any) => Promise<any>) => cb(entityManager)
 		} as unknown as EntityManager;
 
-		sut = new CreateWalletUseCase(walletRepository, wageringRepository, idGenerator, entityManager);
+		sut = new CreateWalletUseCase(
+			walletRepository,
+			ledgerRepository,
+			wageringRepository,
+			idGenerator,
+			entityManager
+		);
 	});
 
 	it('should create a wallet with zero balance without creating ledger or opening transaction', async () => {
@@ -46,7 +55,7 @@ describe('Create Wallet UseCase', () => {
 		const savedWallet = await walletRepository.findById(output.id);
 
 		expect(savedWallet).not.toBeNull();
-		expect(walletRepository.ledgerEntries).toHaveLength(0);
+		expect(ledgerRepository.items).toHaveLength(0);
 		expect(wageringRepository.items).toHaveLength(0);
 	});
 
@@ -59,9 +68,9 @@ describe('Create Wallet UseCase', () => {
 		expect(output.playerId).toBe('player-1');
 		expect(output.balance).toEqual({ amount: '100.00', currency: 'BRL' });
 
-		expect(walletRepository.ledgerEntries).toHaveLength(1);
+		expect(ledgerRepository.items).toHaveLength(1);
 
-		const ledger = walletRepository.ledgerEntries[0];
+		const ledger = ledgerRepository.items[0];
 
 		expect(ledger.direction).toBe(LedgerDirection.Credit);
 		expect(ledger.money.toJSON()).toEqual({ amount: '100.00', currency: 'BRL' });

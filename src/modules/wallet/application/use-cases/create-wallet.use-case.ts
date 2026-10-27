@@ -6,6 +6,7 @@ import type { IWagerTransactionRepository } from '@/modules/wagering/domain/wage
 import { WAGERING_TOKENS } from '@/modules/wagering/wagering.tokens';
 import { Wallet } from '@/modules/wallet/domain/wallet';
 import { LedgerDirection, WalletLedgerEntry } from '@/modules/wallet/domain/wallet-ledger-entry';
+import type { IWalletLedgerEntryRepository } from '@/modules/wallet/domain/wallet-ledger-entry.repository.interface';
 import { WalletAlreadyExistsError } from '@/modules/wallet/domain/wallet.errors';
 import type { IWalletRepository } from '@/modules/wallet/domain/wallet.repository.interface';
 import { WALLET_TOKENS } from '@/modules/wallet/wallet.tokens';
@@ -37,6 +38,8 @@ export class CreateWalletUseCase {
 	constructor(
 		@Inject(WALLET_TOKENS.REPOSITORY)
 		private readonly walletRepository: IWalletRepository,
+		@Inject(WALLET_TOKENS.LEDGER_REPOSITORY)
+		private readonly ledgerRepository: IWalletLedgerEntryRepository,
 		@Inject(WAGERING_TOKENS.REPOSITORY)
 		private readonly wageringRepository: IWagerTransactionRepository,
 
@@ -94,7 +97,8 @@ export class CreateWalletUseCase {
 			openingTransaction.markProcessed(undefined, wallet.createdAt);
 
 			await this.entityManager.transactional(async () => {
-				await this.walletRepository.create(wallet, ledgerEntry);
+				await this.walletRepository.create(wallet);
+				await this.ledgerRepository.create(ledgerEntry);
 				await this.wageringRepository.create(openingTransaction);
 			});
 		} else {
