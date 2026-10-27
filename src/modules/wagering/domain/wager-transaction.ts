@@ -1,6 +1,12 @@
+import { LedgerDirection } from '@/modules/wallet/domain/wallet-ledger-entry';
+
 import { Money } from '@/shared/domain/money/money';
 
-import { InvalidTransactionStateError, MissingReferenceTransactionError } from './wagering.errors';
+import {
+	InvalidTransactionOperationError,
+	InvalidTransactionStateError,
+	MissingReferenceTransactionError
+} from './wagering.errors';
 
 export enum WagerTransactionKind {
 	Opening = 'OPENING',
@@ -72,6 +78,11 @@ export class WagerTransaction {
 		WagerTransactionStatus.Failed
 	]);
 
+	static readonly REFERENCE_REQUIRED_KINDS: ReadonlySet<WagerTransactionKind> = new Set([
+		WagerTransactionKind.Refund,
+		WagerTransactionKind.Rollback
+	]);
+
 	private constructor(
 		public readonly id: string,
 		public readonly providerId: string,
@@ -94,8 +105,7 @@ export class WagerTransaction {
 	) {}
 
 	static create(props: CreateWagerTransactionProps): WagerTransaction {
-		const isReferenceRequired =
-			props.kind === WagerTransactionKind.Refund || props.kind === WagerTransactionKind.Rollback;
+		const isReferenceRequired = WagerTransaction.REFERENCE_REQUIRED_KINDS.has(props.kind);
 
 		if (isReferenceRequired && !props.referenceExternalTransactionId?.trim())
 			throw new MissingReferenceTransactionError(props.kind);
@@ -188,6 +198,37 @@ export class WagerTransaction {
 
 	isTerminal(): boolean {
 		return WagerTransaction.TERMINAL_STATUSES.has(this._status);
+	}
+
+	affectsBalance(): boolean {
+		return this.kind !== WagerTransactionKind.Loss;
+	}
+
+	requiresReference(): boolean {
+		return WagerTransaction.REFERENCE_REQUIRED_KINDS.has(this.kind);
+	}
+
+	matchesPayload(payloadHash: string): boolean {
+		return this.payloadHash === payloadHash;
+	}
+
+	ledgerDirectionFor(reference?: WagerTransaction): LedgerDirection {
+		switch (this.kind) {
+			case WagerTransactionKind.Bet:
+				return LedgerDirection.Debit;
+			case WagerTransactionKind.Win:
+			case WagerTransactionKind.Opening:
+			case WagerTransactionKind.Refund:
+				return LedgerDirection.Credit;
+			case WagerTransactionKind.Rollback:
+				if (!reference) throw new MissingReferenceTransactionError('ROLLBACK');
+
+				return reference.ledgerDirectionFor() === LedgerDirection.Debit
+					? LedgerDirection.Credit
+					: LedgerDirection.Debit;
+			case WagerTransactionKind.Loss:
+				throw new InvalidTransactionOperationError('LOSS operations do not produce ledger entries');
+		}
 	}
 
 	private assertNotTerminal(action: string): void {

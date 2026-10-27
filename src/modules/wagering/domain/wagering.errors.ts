@@ -15,3 +15,11 @@ export class MissingReferenceTransactionError extends DomainError {
 		super(`Operation '${kind}' requires a referenceExternalTransactionId`);
 	}
 }
+
+export class InvalidTransactionOperationError extends DomainError {
+	readonly code = 'INVALID_TRANSACTION_OPERATION';
+
+	constructor(reason: string) {
+		super(`Invalid transaction operation: ${reason}`);
+	}
+}
