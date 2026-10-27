@@ -23,3 +23,10 @@ export class InvalidInitialBalanceError extends DomainError {
 		super(`Initial balance cannot be negative, received: ${amount}`);
 	}
 }
+
+export class WalletAlreadyExistsError extends DomainError {
+	readonly code = 'WALLET_ALREADY_EXISTS';
+	constructor(playerId: string, currency: string) {
+		super(`Wallet already exists for player ${playerId} with currency ${currency}`);
+	}
+}
