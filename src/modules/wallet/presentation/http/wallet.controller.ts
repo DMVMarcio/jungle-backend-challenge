@@ -5,7 +5,7 @@ import { GetWalletUseCase } from '@/modules/wallet/application/use-cases/get-wal
 
 import { ZodValidationPipe } from '@/shared/presentation/http/pipes/zod-validation.pipe';
 
-import { CreateWalletDto, createWalletSchema } from './dto/create-wallet.dto';
+import { type CreateWalletDto, createWalletSchema } from './dto/create-wallet.dto';
 
 @Controller('wallets')
 export class WalletController {
