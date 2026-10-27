@@ -3,15 +3,16 @@ import { describe, expect, it } from 'bun:test';
 import { Money } from '@/shared/domain/money/money';
 
 import { Wallet } from './wallet';
-import { InvalidInitialBalanceError } from './wallet.errors';
+import { LedgerDirection } from './wallet-ledger-entry';
+import { InsufficientFundsError, InvalidInitialBalanceError } from './wallet.errors';
 
 describe('Wallet Aggregate Root & Ledger', () => {
 	const playerId = 'player-123';
 
-	describe('Wallet open', () => {
+	describe('Open', () => {
 		it('should open a wallet with initial balance and version 1', () => {
-			const initialBalanceMoney = Money.from({ amount: '100.00', currency: 'BRL' });
-			const wallet = Wallet.open({ playerId, initialBalance: initialBalanceMoney });
+			const initialBalance = Money.from({ amount: '100.00', currency: 'BRL' });
+			const wallet = Wallet.open({ playerId, initialBalance: initialBalance });
 
 			expect(wallet.playerId).toBe(playerId);
 
@@ -23,11 +24,72 @@ describe('Wallet Aggregate Root & Ledger', () => {
 		});
 
 		it('should reject opening a wallet with negative balance', () => {
-			const negativeBalanceMoney = Money.from({ amount: '50.00', currency: 'BRL' }).negate();
+			const negativeBalance = Money.from({ amount: '50.00', currency: 'BRL' }).negate();
 
-			expect(() => Wallet.open({ playerId, initialBalance: negativeBalanceMoney })).toThrow(
+			expect(() => Wallet.open({ playerId, initialBalance: negativeBalance })).toThrow(
 				InvalidInitialBalanceError
 			);
+		});
+	});
+
+	describe('Credit', () => {
+		it('should increase balance, increment version, and produce a balanced credit ledger entry', () => {
+			const wallet = Wallet.open({
+				playerId,
+				initialBalance: Money.from({ amount: '50.00', currency: 'BRL' })
+			});
+
+			const transactionId = 'tx-credit-1';
+
+			const creditAmount = Money.from({ amount: '25.00', currency: 'BRL' });
+			const ledgerEntry = wallet.credit(creditAmount, transactionId);
+
+			expect(wallet.balance.toJSON().amount).toBe('75.00');
+			expect(wallet.version).toBe(2);
+
+			expect(ledgerEntry.walletId).toBe(wallet.id);
+			expect(ledgerEntry.transactionId).toBe(transactionId);
+			expect(ledgerEntry.direction).toBe(LedgerDirection.Credit);
+			expect(ledgerEntry.money.toJSON().amount).toBe('25.00');
+			expect(ledgerEntry.balanceBefore.toJSON().amount).toBe('50.00');
+			expect(ledgerEntry.balanceAfter.toJSON().amount).toBe('75.00');
+			expect(ledgerEntry.isBalanced()).toBe(true);
+		});
+	});
+
+	describe('Debit', () => {
+		it('should decrease balance, increment version, and produce a balanced debit ledger entry', () => {
+			const wallet = Wallet.open({
+				playerId,
+				initialBalance: Money.from({ amount: '100.00', currency: 'BRL' })
+			});
+
+			const transactionId = 'tx-debit-1';
+
+			const debitAmount = Money.from({ amount: '40.00', currency: 'BRL' });
+			const ledgerEntry = wallet.debit(debitAmount, transactionId);
+
+			expect(wallet.balance.toJSON().amount).toBe('60.00');
+			expect(wallet.version).toBe(2);
+
+			expect(ledgerEntry.direction).toBe(LedgerDirection.Debit);
+			expect(ledgerEntry.balanceBefore.toJSON().amount).toBe('100.00');
+			expect(ledgerEntry.balanceAfter.toJSON().amount).toBe('60.00');
+			expect(ledgerEntry.isBalanced()).toBe(true);
+		});
+
+		it('should throw InsufficientFundsError and keep balance and version untouched when balance is insufficient', () => {
+			const wallet = Wallet.open({
+				playerId,
+				initialBalance: Money.from({ amount: '50.00', currency: 'BRL' })
+			});
+
+			const excessiveAmount = Money.from({ amount: '50.01', currency: 'BRL' });
+
+			expect(() => wallet.debit(excessiveAmount, 'tx-fail')).toThrow(InsufficientFundsError);
+
+			expect(wallet.balance.toJSON().amount).toBe('50.00');
+			expect(wallet.version).toBe(1);
 		});
 	});
 });
