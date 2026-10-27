@@ -14,28 +14,29 @@ export const externalWagerKindSchema = z.enum([
 
 export const createWagerTransactionSchema = z
 	.object({
-		providerId: z.string().trim().min(1, 'providerId is required'),
-		externalTransactionId: z.string().trim().min(1, 'externalTransactionId is required'),
+		providerId: z.string().trim().min(1, 'is required'),
+		externalTransactionId: z.string().trim().min(1, 'is required'),
 		playerId: z.uuid(),
 		walletId: z.uuid(),
-		roundId: z.string().trim().min(1, 'roundId is required'),
-		gameId: z.string().trim().min(1, 'gameId is required'),
+		roundId: z.string().trim().min(1, 'is required'),
+		gameId: z.string().trim().min(1, 'is required'),
 		kind: externalWagerKindSchema,
 		money: moneySchema,
 		referenceExternalTransactionId: z.string().trim().min(1).optional()
 	})
 	.refine(
 		data => {
-			if (WagerTransaction.requiresReference(data.kind))
+			if (WagerTransaction.requiresReference(data.kind)) {
 				return (
 					typeof data.referenceExternalTransactionId === 'string' &&
 					data.referenceExternalTransactionId.length > 0
 				);
+			}
 
 			return true;
 		},
 		{
-			message: 'referenceExternalTransactionId is required for this operation kind',
+			message: 'is required for this operation kind',
 			path: ['referenceExternalTransactionId']
 		}
 	);

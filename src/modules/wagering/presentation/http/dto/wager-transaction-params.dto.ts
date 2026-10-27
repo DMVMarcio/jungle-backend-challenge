@@ -7,8 +7,8 @@ export const wagerTransactionIdParamSchema = z.object({
 export type WagerTransactionIdParamDto = z.infer<typeof wagerTransactionIdParamSchema>;
 
 export const providerTransactionParamsSchema = z.object({
-	providerId: z.string().trim().min(1, 'providerId is required'),
-	externalTransactionId: z.string().trim().min(1, 'externalTransactionId is required')
+	providerId: z.string().trim().min(1, 'is required'),
+	externalTransactionId: z.string().trim().min(1, 'is required')
 });
 
 export type ProviderTransactionParamsDto = z.infer<typeof providerTransactionParamsSchema>;
