@@ -1,9 +1,15 @@
 import { describe, expect, it } from 'bun:test';
 
+import { LedgerDirection } from '@/modules/wallet/domain/wallet-ledger-entry';
+
 import { Money } from '@/shared/domain/money/money';
 
 import { WagerTransaction, WagerTransactionKind, WagerTransactionStatus } from './wager-transaction';
-import { InvalidTransactionStateError } from './wagering.errors';
+import {
+	InvalidTransactionOperationError,
+	InvalidTransactionStateError,
+	MissingReferenceTransactionError
+} from './wagering.errors';
 
 describe('WagerTransaction', () => {
 	const baseProps = {
@@ -77,15 +83,67 @@ describe('WagerTransaction', () => {
 
 	describe('Idempotency Check', () => {
 		it('should match identical payload hashes and detect conflicting hashes', () => {
-			const tx = WagerTransaction.create({
+			const transaction = WagerTransaction.create({
 				...baseProps,
 
 				payloadHash: 'hash-original',
 				kind: WagerTransactionKind.Bet
 			});
 
-			expect(tx.matchesPayload('hash-original')).toBe(true);
-			expect(tx.matchesPayload('hash-different')).toBe(false);
+			expect(transaction.matchesPayload('hash-original')).toBe(true);
+			expect(transaction.matchesPayload('hash-different')).toBe(false);
+		});
+	});
+
+	describe('Ledger Directions', () => {
+		it('should return DEBIT for BET', () => {
+			const betTransaction = WagerTransaction.create({ ...baseProps, kind: WagerTransactionKind.Bet });
+
+			expect(betTransaction.ledgerDirectionFor()).toBe(LedgerDirection.Debit);
+		});
+
+		it('should return CREDIT for WIN, OPENING and REFUND', () => {
+			const winTransaction = WagerTransaction.create({ ...baseProps, kind: WagerTransactionKind.Win });
+			const refundTransaction = WagerTransaction.create({
+				...baseProps,
+				kind: WagerTransactionKind.Refund,
+				referenceExternalTransactionId: 'tx-1'
+			});
+
+			expect(winTransaction.ledgerDirectionFor()).toBe(LedgerDirection.Credit);
+			expect(refundTransaction.ledgerDirectionFor()).toBe(LedgerDirection.Credit);
+		});
+
+		it('should inverse direction for ROLLBACK', () => {
+			const betTransaction = WagerTransaction.create({ ...baseProps, kind: WagerTransactionKind.Bet });
+			const winTransaction = WagerTransaction.create({ ...baseProps, kind: WagerTransactionKind.Win });
+
+			const rollbackBet = WagerTransaction.create({
+				...baseProps,
+				kind: WagerTransactionKind.Rollback,
+				referenceExternalTransactionId: 'tx-bet'
+			});
+
+			const rollbackWin = WagerTransaction.create({
+				...baseProps,
+				kind: WagerTransactionKind.Rollback,
+				referenceExternalTransactionId: 'tx-win'
+			});
+
+			expect(rollbackBet.ledgerDirectionFor(betTransaction)).toBe(LedgerDirection.Credit);
+			expect(rollbackWin.ledgerDirectionFor(winTransaction)).toBe(LedgerDirection.Debit);
+		});
+
+		it('should throw when ledgerDirectionFor is called on LOSS or ROLLBACK without reference', () => {
+			const lossTransaction = WagerTransaction.create({ ...baseProps, kind: WagerTransactionKind.Loss });
+			const rollbackTransaction = WagerTransaction.create({
+				...baseProps,
+				kind: WagerTransactionKind.Rollback,
+				referenceExternalTransactionId: 'tx-ref'
+			});
+
+			expect(() => lossTransaction.ledgerDirectionFor()).toThrow(InvalidTransactionOperationError);
+			expect(() => rollbackTransaction.ledgerDirectionFor()).toThrow(MissingReferenceTransactionError);
 		});
 	});
 });
