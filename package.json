@@ -5,13 +5,17 @@
 	"private": true,
 	"scripts": {
 		"dev": "bun --watch src/main.ts",
-		"typecheck": "tsc --noEmit"
+		"typecheck": "tsc --noEmit",
+		"migration:create": "bunx --bun mikro-orm migration:create",
+		"migration:up": "bunx --bun mikro-orm migration:up",
+		"migration:down": "bunx --bun mikro-orm migration:down"
 	},
 	"devDependencies": {
 		"@mikro-orm/cli": "^7.2.5",
 		"@types/bun": "latest",
 		"@types/node": "^26.6.5",
 		"@zyrohub/config-prettier": "^1.0.8",
+		"jiti": "^2.7.0",
 		"typescript": "^7.0.2"
 	},
 	"peerDependencies": {
