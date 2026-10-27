@@ -14,6 +14,7 @@ export interface PaginatedLedgerEntries {
 export interface IWalletLedgerEntryRepository {
 	findPaginated(input: FindLedgerEntriesInput): Promise<PaginatedLedgerEntries>;
 	findAllByWalletId(walletId: string): Promise<WalletLedgerEntry[]>;
+	findByTransactionId(transactionId: string): Promise<WalletLedgerEntry | null>;
 
 	create(entry: WalletLedgerEntry): Promise<void>;
 }

@@ -64,6 +64,13 @@ export class WalletLedgerEntryMikroOrmRepository implements IWalletLedgerEntryRe
 		return records.map(r => WalletLedgerEntryMapper.toDomain(r));
 	}
 
+	async findByTransactionId(transactionId: string): Promise<WalletLedgerEntry | null> {
+		const record = await this.entityManager.findOne(WalletLedgerEntrySchema, { transactionId });
+		if (!record) return null;
+
+		return WalletLedgerEntryMapper.toDomain(record);
+	}
+
 	async create(entry: WalletLedgerEntry): Promise<void> {
 		const record = this.entityManager.create(WalletLedgerEntrySchema, WalletLedgerEntryMapper.toPersistence(entry));
 		this.entityManager.persist(record);

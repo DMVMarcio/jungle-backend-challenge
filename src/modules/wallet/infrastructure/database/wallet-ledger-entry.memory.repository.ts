@@ -54,6 +54,10 @@ export class WalletLedgerEntryMemoryRepository implements IWalletLedgerEntryRepo
 			.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime() || a.id.localeCompare(b.id));
 	}
 
+	async findByTransactionId(transactionId: string): Promise<WalletLedgerEntry | null> {
+		return this.items.find(e => e.transactionId === transactionId) ?? null;
+	}
+
 	async create(entry: WalletLedgerEntry): Promise<void> {
 		this.items.push(entry);
 	}
