@@ -10,7 +10,9 @@ import { WalletAlreadyExistsError } from '@/modules/wallet/domain/wallet.errors'
 import { IWalletRepository } from '@/modules/wallet/domain/wallet.repository.interface';
 import { WALLET_TOKENS } from '@/modules/wallet/wallet.tokens';
 
+import { IIdGenerator } from '@/shared/application/providers/id-generator.interface';
 import { Money } from '@/shared/domain/money/money';
+import { SHARED_TOKENS } from '@/shared/shared.tokens';
 
 export interface CreateWalletUseCaseInput {
 	playerId: string;
@@ -38,6 +40,9 @@ export class CreateWalletUseCase {
 		@Inject(WAGERING_TOKENS.REPOSITORY)
 		private readonly wageringRepository: IWagerTransactionRepository,
 
+		@Inject(SHARED_TOKENS.ID_GENERATOR)
+		private readonly idGenerator: IIdGenerator,
+
 		private readonly entityManager: EntityManager
 	) {}
 
@@ -57,7 +62,7 @@ export class CreateWalletUseCase {
 		});
 
 		if (initialMoney.isPositive()) {
-			const openingTransactionId = crypto.randomUUID();
+			const openingTransactionId = this.idGenerator.generate();
 
 			const ledgerEntry = WalletLedgerEntry.create({
 				walletId: wallet.id,
