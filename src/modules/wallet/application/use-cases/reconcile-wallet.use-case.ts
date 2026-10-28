@@ -1,5 +1,6 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 
+import { MetricsService } from '@/core/observability/services/metrics.service';
 import type { IWalletLedgerEntryRepository } from '@/modules/wallet/domain/wallet-ledger-entry.repository.interface';
 import type { IWalletRepository } from '@/modules/wallet/domain/wallet.repository.interface';
 import { WALLET_TOKENS } from '@/modules/wallet/wallet.tokens';
@@ -39,7 +40,9 @@ export class ReconcileWalletUseCase {
 		@Inject(WALLET_TOKENS.REPOSITORY)
 		private readonly walletRepository: IWalletRepository,
 		@Inject(WALLET_TOKENS.LEDGER_REPOSITORY)
-		private readonly ledgerRepository: IWalletLedgerEntryRepository
+		private readonly ledgerRepository: IWalletLedgerEntryRepository,
+		@Optional()
+		private readonly metricsService?: MetricsService
 	) {}
 
 	async execute(input: ReconcileWalletUseCaseInput): Promise<ReconcileWalletUseCaseOutput> {
@@ -61,13 +64,15 @@ export class ReconcileWalletUseCase {
 		const difference = storedBalance.subtract(calculated);
 		const consistent = difference.isZero();
 
-		if (!consistent)
+		if (!consistent) {
+			this.metricsService?.recordReconciliationDiscrepancy();
 			this.logger.warn(`Wallet reconciliation discrepancy detected`, {
 				walletId: wallet.id,
 				storedBalance: storedBalance.toString(),
 				calculatedBalance: calculated.toString(),
 				difference: difference.toString()
 			});
+		}
 
 		return {
 			walletId: wallet.id,

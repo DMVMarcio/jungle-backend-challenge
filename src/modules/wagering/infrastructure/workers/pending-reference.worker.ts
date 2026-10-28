@@ -84,30 +84,31 @@ export class PendingReferenceWorker implements OnApplicationBootstrap, OnApplica
 		this.isProcessing = true;
 
 		try {
-			const pendingTransactions = await this.wageringRepository.findPendingReferences(batchSize);
-			if (pendingTransactions.length === 0) return 0;
+			return await this.entityManager.transactional(async () => {
+				const pendingTransactions = await this.wageringRepository.findPendingReferences(batchSize);
+				if (pendingTransactions.length === 0) return 0;
 
-			let resolvedCount = 0;
+				let resolvedCount = 0;
 
-			for (const transaction of pendingTransactions) {
-				try {
-					const resolved = await this.resolvePendingTransaction(transaction, now, ttl);
-					if (resolved) resolvedCount++;
-				} catch (error) {
-					this.entityManager.clear?.();
-					this.logger.error(
-						`Failed to reprocess pending transaction ${transaction.id}: ${(error as Error).message}`,
-						(error as Error).stack,
-						{
-							transactionId: transaction.id,
-							walletId: transaction.walletId,
-							providerId: transaction.providerId
-						}
-					);
+				for (const transaction of pendingTransactions) {
+					try {
+						const resolved = await this.resolvePendingTransaction(transaction, now, ttl);
+						if (resolved) resolvedCount++;
+					} catch (error) {
+						this.logger.error(
+							`Failed to reprocess pending transaction ${transaction.id}: ${(error as Error).message}`,
+							(error as Error).stack,
+							{
+								transactionId: transaction.id,
+								walletId: transaction.walletId,
+								providerId: transaction.providerId
+							}
+						);
+					}
 				}
-			}
 
-			return resolvedCount;
+				return resolvedCount;
+			});
 		} finally {
 			this.isProcessing = false;
 		}

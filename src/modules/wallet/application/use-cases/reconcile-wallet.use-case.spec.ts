@@ -1,6 +1,7 @@
 import { Logger } from '@nestjs/common';
 import { beforeEach, describe, expect, it, spyOn } from 'bun:test';
 
+import { MetricsService } from '@/core/observability/services/metrics.service';
 import { Wallet } from '@/modules/wallet/domain/wallet';
 import { LedgerDirection, WalletLedgerEntry } from '@/modules/wallet/domain/wallet-ledger-entry';
 import { WalletNotFoundError } from '@/modules/wallet/domain/wallet.errors';
@@ -14,12 +15,14 @@ import { ReconcileWalletUseCase } from './reconcile-wallet.use-case';
 describe('ReconcileWalletUseCase', () => {
 	let walletRepository: WalletMemoryRepository;
 	let ledgerRepository: WalletLedgerEntryMemoryRepository;
+	let metricsService: MetricsService;
 	let useCase: ReconcileWalletUseCase;
 
 	beforeEach(() => {
 		walletRepository = new WalletMemoryRepository();
 		ledgerRepository = new WalletLedgerEntryMemoryRepository();
-		useCase = new ReconcileWalletUseCase(walletRepository, ledgerRepository);
+		metricsService = new MetricsService();
+		useCase = new ReconcileWalletUseCase(walletRepository, ledgerRepository, metricsService);
 	});
 
 	it('should throw WalletNotFoundError when wallet does not exist', async () => {
@@ -107,6 +110,7 @@ describe('ReconcileWalletUseCase', () => {
 		expect(result.calculatedBalance).toEqual({ amount: '50.00', currency: 'BRL' });
 		expect(result.difference).toEqual({ amount: '50.00', currency: 'BRL' });
 		expect(result.checkedEntries).toBe(1);
+		expect(metricsService.getSnapshot().reconciliationDiscrepancies).toBe(1);
 		expect(warnSpy).toHaveBeenCalledWith('Wallet reconciliation discrepancy detected', expect.objectContaining({ walletId: 'wallet-1' }));
 
 		warnSpy.mockRestore();

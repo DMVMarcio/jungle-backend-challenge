@@ -1,3 +1,4 @@
+import type { FilterQuery } from '@mikro-orm/core';
 import { EntityManager } from '@mikro-orm/postgresql';
 import { Injectable } from '@nestjs/common';
 
@@ -9,7 +10,7 @@ import {
 } from '@/modules/wallet/domain/wallet-ledger-entry.repository.interface';
 
 import { WalletLedgerEntryMapper } from './wallet-ledger-entry.mapper';
-import { WalletLedgerEntrySchema } from './wallet-ledger-entry.schema';
+import { WalletLedgerEntryDbRecord, WalletLedgerEntrySchema } from './wallet-ledger-entry.schema';
 
 @Injectable()
 export class WalletLedgerEntryMikroOrmRepository implements IWalletLedgerEntryRepository {
@@ -17,7 +18,7 @@ export class WalletLedgerEntryMikroOrmRepository implements IWalletLedgerEntryRe
 
 	async findPaginated(input: FindLedgerEntriesInput): Promise<PaginatedLedgerEntries> {
 		const limit = Math.min(Math.max(input.limit || 50, 1), 100);
-		const whereClause: Record<string, any> = { walletId: input.walletId };
+		const whereClause: FilterQuery<WalletLedgerEntryDbRecord> = { walletId: input.walletId };
 
 		if (input.cursor) {
 			try {

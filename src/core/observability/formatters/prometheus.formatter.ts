@@ -32,6 +32,7 @@ export const formatPrometheusMetrics = (snapshot: MetricsSnapshot): string => {
 			),
 			formatCounterMap('wager_dlq_messages_total', 'Total messages moved to DLQ', 'queue', snapshot.dlqMessages),
 			`# HELP wager_lock_conflicts_total Total database lock and unique concurrency conflicts detected\n# TYPE wager_lock_conflicts_total counter\nwager_lock_conflicts_total ${snapshot.lockConflicts}`,
+			`# HELP wager_reconciliation_discrepancies_total Total wallet reconciliation discrepancies detected\n# TYPE wager_reconciliation_discrepancies_total counter\nwager_reconciliation_discrepancies_total ${snapshot.reconciliationDiscrepancies}`,
 			`# HELP wager_outbox_lag Current count of pending outbox messages\n# TYPE wager_outbox_lag gauge\nwager_outbox_lag ${snapshot.outboxLag}`,
 			`# HELP wager_processing_latency_ms Summary of wager transaction processing duration in ms\n# TYPE wager_processing_latency_ms summary\nwager_processing_latency_ms{quantile="0.5"} ${snapshot.latency.p50Ms}\nwager_processing_latency_ms{quantile="0.95"} ${snapshot.latency.p95Ms}\nwager_processing_latency_ms{quantile="0.99"} ${snapshot.latency.p99Ms}\nwager_processing_latency_ms_sum ${snapshot.latency.sumMs}\nwager_processing_latency_ms_count ${snapshot.latency.count}`
 		].join('\n') + '\n'

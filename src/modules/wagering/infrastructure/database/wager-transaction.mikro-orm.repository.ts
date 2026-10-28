@@ -1,4 +1,4 @@
-import { EntityManager } from '@mikro-orm/postgresql';
+import { EntityManager, LockMode } from '@mikro-orm/postgresql';
 import { Injectable } from '@nestjs/common';
 
 import {
@@ -60,7 +60,11 @@ export class WagerTransactionMikroOrmRepository implements IWagerTransactionRepo
 		const records = await this.entityManager.find(
 			WagerTransactionSchema,
 			{ status: WagerTransactionStatus.PendingReference },
-			{ limit, orderBy: { createdAt: 'ASC' } }
+			{
+				limit,
+				orderBy: { createdAt: 'ASC' },
+				lockMode: LockMode.PESSIMISTIC_PARTIAL_WRITE
+			}
 		);
 
 		return records.map(record => WagerTransactionMapper.toDomain(record));

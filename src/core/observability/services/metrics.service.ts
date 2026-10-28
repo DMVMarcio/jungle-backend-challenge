@@ -9,6 +9,7 @@ export interface MetricsSnapshot {
 	dlqMessages: Record<string, number>;
 	lockConflicts: number;
 	outboxLag: number;
+	reconciliationDiscrepancies: number;
 	latency: {
 		count: number;
 		sumMs: number;
@@ -31,6 +32,7 @@ export class MetricsService {
 	private readonly dlqMessages = new Map<string, number>();
 	private lockConflicts = 0;
 	private outboxLag = 0;
+	private reconciliationDiscrepancies = 0;
 	private readonly latencySamples: number[] = [];
 	private latencySum = 0;
 	private latencyMin = 0;
@@ -62,6 +64,10 @@ export class MetricsService {
 
 	setOutboxLag(count: number): void {
 		this.outboxLag = Math.max(0, count);
+	}
+
+	recordReconciliationDiscrepancy(): void {
+		this.reconciliationDiscrepancies++;
 	}
 
 	recordProcessingLatency(durationMs: number): void {
@@ -100,6 +106,7 @@ export class MetricsService {
 			dlqMessages: Object.fromEntries(this.dlqMessages.entries()),
 			lockConflicts: this.lockConflicts,
 			outboxLag: this.outboxLag,
+			reconciliationDiscrepancies: this.reconciliationDiscrepancies,
 			latency: {
 				count,
 				sumMs: Number(this.latencySum.toFixed(2)),
@@ -124,6 +131,7 @@ export class MetricsService {
 		this.dlqMessages.clear();
 		this.lockConflicts = 0;
 		this.outboxLag = 0;
+		this.reconciliationDiscrepancies = 0;
 		this.latencySamples.length = 0;
 		this.latencySum = 0;
 		this.latencyMin = 0;

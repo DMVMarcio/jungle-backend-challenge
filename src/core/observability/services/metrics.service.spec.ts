@@ -39,15 +39,17 @@ describe('MetricsService', () => {
 		expect(snapshot.retries['sqs_consumer']).toBe(1);
 	});
 
-	it('should record DLQ messages, lock conflicts and outbox lag', () => {
+	it('should record DLQ messages, lock conflicts, outbox lag and reconciliation discrepancies', () => {
 		sut.recordDlq('test-dlq.fifo');
 		sut.recordLockConflict();
 		sut.recordLockConflict();
+		sut.recordReconciliationDiscrepancy();
 		sut.setOutboxLag(14);
 
 		const snapshot = sut.getSnapshot();
 		expect(snapshot.dlqMessages['test-dlq.fifo']).toBe(1);
 		expect(snapshot.lockConflicts).toBe(2);
+		expect(snapshot.reconciliationDiscrepancies).toBe(1);
 		expect(snapshot.outboxLag).toBe(14);
 	});
 
@@ -70,6 +72,7 @@ describe('MetricsService', () => {
 		sut.recordTransaction('PROCESSED');
 		sut.recordDuplicate('idempotency');
 		sut.recordLockConflict();
+		sut.recordReconciliationDiscrepancy();
 		sut.setOutboxLag(5);
 		sut.recordProcessingLatency(25);
 
@@ -78,6 +81,7 @@ describe('MetricsService', () => {
 		expect(prometheusText).toContain('wager_transactions_total{status="PROCESSED"} 1');
 		expect(prometheusText).toContain('wager_duplicates_detected_total{source="idempotency"} 1');
 		expect(prometheusText).toContain('wager_lock_conflicts_total 1');
+		expect(prometheusText).toContain('wager_reconciliation_discrepancies_total 1');
 		expect(prometheusText).toContain('wager_outbox_lag 5');
 		expect(prometheusText).toContain('wager_processing_latency_ms_count 1');
 	});
@@ -85,11 +89,13 @@ describe('MetricsService', () => {
 	it('should reset all recorded metrics', () => {
 		sut.recordTransaction('PROCESSED');
 		sut.recordLockConflict();
+		sut.recordReconciliationDiscrepancy();
 		sut.reset();
 
 		const snapshot = sut.getSnapshot();
 		expect(Object.keys(snapshot.transactions).length).toBe(0);
 		expect(snapshot.lockConflicts).toBe(0);
+		expect(snapshot.reconciliationDiscrepancies).toBe(0);
 		expect(snapshot.latency.count).toBe(0);
 	});
 });
