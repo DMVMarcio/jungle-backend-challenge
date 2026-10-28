@@ -1,24 +1,27 @@
 import { EntityManager } from '@mikro-orm/postgresql';
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
 
+import { InboxMessage } from '@/modules/inbox/domain/inbox-message';
+import type { IInboxRepository } from '@/modules/inbox/domain/inbox.repository.interface';
+import { INBOX_TOKENS } from '@/modules/inbox/inbox.tokens';
 import {
 	FailureCode,
 	WagerTransaction,
 	WagerTransactionKind,
 	WagerTransactionStatus
 } from '@/modules/wagering/domain/wager-transaction';
-import { IdempotencyConflictError } from '@/modules/wagering/domain/wagering.errors';
 import type { IWagerTransactionRepository } from '@/modules/wagering/domain/wager-transaction.repository.interface';
+import { IdempotencyConflictError } from '@/modules/wagering/domain/wagering.errors';
 import { WAGERING_TOKENS } from '@/modules/wagering/wagering.tokens';
 import { Wallet } from '@/modules/wallet/domain/wallet';
-import { WalletNotFoundError, WalletOwnershipError } from '@/modules/wallet/domain/wallet.errors';
-import type { IWalletRepository } from '@/modules/wallet/domain/wallet.repository.interface';
 import { WalletLedgerEntry } from '@/modules/wallet/domain/wallet-ledger-entry';
 import type { IWalletLedgerEntryRepository } from '@/modules/wallet/domain/wallet-ledger-entry.repository.interface';
+import { WalletNotFoundError, WalletOwnershipError } from '@/modules/wallet/domain/wallet.errors';
+import type { IWalletRepository } from '@/modules/wallet/domain/wallet.repository.interface';
 import { WALLET_TOKENS } from '@/modules/wallet/wallet.tokens';
 
-import { CurrencyMismatchError } from '@/shared/domain/money/money.errors';
 import { Money } from '@/shared/domain/money/money';
+import { CurrencyMismatchError } from '@/shared/domain/money/money.errors';
 import type { IIdGenerator } from '@/shared/ports/id-generator.port';
 import type { IPayloadHasher } from '@/shared/ports/payload-hasher.port';
 import { SHARED_TOKENS } from '@/shared/shared.tokens';
@@ -45,6 +48,10 @@ export interface ProcessWagerTransactionInput {
 		currency: string;
 	};
 	referenceExternalTransactionId?: string;
+	inboxMessage?: {
+		messageId: string;
+		consumerName: string;
+	};
 }
 
 export interface ProcessWagerTransactionOutput {
@@ -84,7 +91,11 @@ export class ProcessWagerTransactionUseCase {
 		private readonly lossOperation: LossOperation,
 		private readonly refundOperation: RefundOperation,
 		private readonly rollbackOperation: RollbackOperation,
-		private readonly entityManager: EntityManager
+		private readonly entityManager: EntityManager,
+
+		@Optional()
+		@Inject(INBOX_TOKENS.REPOSITORY)
+		private readonly inboxRepository?: IInboxRepository
 	) {
 		this.operations = {
 			[WagerTransactionKind.Bet]: this.betOperation,
@@ -122,6 +133,17 @@ export class ProcessWagerTransactionUseCase {
 
 			await this.wageringRepository.create(transaction);
 			await this.outboxService.enqueue(transaction, wallet.id, wallet.balance);
+
+			if (input.inboxMessage && this.inboxRepository) {
+				const inbox = InboxMessage.receive({
+					messageId: input.inboxMessage.messageId,
+					consumerName: input.inboxMessage.consumerName,
+					payloadHash
+				});
+
+				inbox.markProcessed();
+				await this.inboxRepository.create(inbox);
+			}
 
 			return {
 				transactionId: transaction.id,
@@ -183,18 +205,11 @@ export class ProcessWagerTransactionUseCase {
 		externalTransactionId: string,
 		idempotencyKey: string
 	): Promise<void> {
-		const existing = await this.wageringRepository.findByProviderAndExternalId(
-			providerId,
-			externalTransactionId
-		);
+		const existing = await this.wageringRepository.findByProviderAndExternalId(providerId, externalTransactionId);
 		if (existing) throw new IdempotencyConflictError(idempotencyKey);
 	}
 
-	private async loadAndValidateWallet(
-		walletId: string,
-		playerId: string,
-		expectedCurrency: string
-	): Promise<Wallet> {
+	private async loadAndValidateWallet(walletId: string, playerId: string, expectedCurrency: string): Promise<Wallet> {
 		const wallet = await this.walletRepository.findByIdWithLock(walletId);
 		if (!wallet) throw new WalletNotFoundError(walletId);
 		if (wallet.playerId !== playerId) throw new WalletOwnershipError(walletId, playerId);

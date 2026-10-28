@@ -1,6 +1,7 @@
 import { EntityManager } from '@mikro-orm/postgresql';
 import { beforeEach, describe, expect, it } from 'bun:test';
 
+import { InboxMemoryRepository } from '@/modules/inbox/infrastructure/database/inbox.memory.repository';
 import { OutboxMemoryRepository } from '@/modules/outbox/infrastructure/database/outbox.memory.repository';
 import { WagerTransactionKind, WagerTransactionStatus } from '@/modules/wagering/domain/wager-transaction';
 import { IdempotencyConflictError } from '@/modules/wagering/domain/wagering.errors';
@@ -22,7 +23,6 @@ import { RefundOperation } from '../operations/refund.operation';
 import { RollbackOperation } from '../operations/rollback.operation';
 import { WinOperation } from '../operations/win.operation';
 import { WageringOutboxService } from '../services/wagering-outbox.service';
-
 import { ProcessWagerTransactionUseCase } from './process-wager-transaction.use-case';
 
 describe('ProcessWagerTransactionUseCase', () => {
@@ -32,6 +32,7 @@ describe('ProcessWagerTransactionUseCase', () => {
 	let walletRepository: WalletMemoryRepository;
 	let ledgerRepository: WalletLedgerEntryMemoryRepository;
 	let outboxRepository: OutboxMemoryRepository;
+	let inboxRepository: InboxMemoryRepository;
 
 	let idGenerator: IdGeneratorUuidAdapter;
 	let payloadHasher: PayloadHasherSha256Adapter;
@@ -45,6 +46,7 @@ describe('ProcessWagerTransactionUseCase', () => {
 		walletRepository = new WalletMemoryRepository();
 		ledgerRepository = new WalletLedgerEntryMemoryRepository();
 		outboxRepository = new OutboxMemoryRepository();
+		inboxRepository = new InboxMemoryRepository();
 
 		idGenerator = new IdGeneratorUuidAdapter();
 		payloadHasher = new PayloadHasherSha256Adapter();
@@ -72,7 +74,8 @@ describe('ProcessWagerTransactionUseCase', () => {
 			lossOperation,
 			refundOperation,
 			rollbackOperation,
-			entityManager
+			entityManager,
+			inboxRepository
 		);
 
 		const wallet = Wallet.open({
@@ -393,8 +396,33 @@ describe('ProcessWagerTransactionUseCase', () => {
 		expect(rollbackResult.balance).toEqual({ amount: '10.00', currency: 'BRL' });
 	});
 
+	it('should record and mark inbox message as processed when inboxMessage is provided', async () => {
+		const result = await sut.execute({
+			idempotencyKey: 'idemp-inbox-1',
+			providerId: 'provider-a',
+			externalTransactionId: 'transaction-inbox-1',
+			playerId: testPlayerId,
+			walletId: testWalletId,
+			roundId: 'round-1',
+			gameId: 'game-1',
+			kind: WagerTransactionKind.Bet,
+			money: { amount: '15.00', currency: 'BRL' },
+			inboxMessage: {
+				messageId: 'msg-sqs-100',
+				consumerName: 'WagerTransactionConsumer'
+			}
+		});
+
+		expect(result.status).toBe(WagerTransactionStatus.Processed);
+		expect(inboxRepository.items).toHaveLength(1);
+		const savedInbox = inboxRepository.items[0];
+		expect(savedInbox.messageId).toBe('msg-sqs-100');
+		expect(savedInbox.consumerName).toBe('WagerTransactionConsumer');
+		expect(savedInbox.processedAt).toBeDefined();
+	});
+
 	it('should throw WalletNotFoundError when wallet does not exist', async () => {
-		await expect(
+		expect(
 			sut.execute({
 				idempotencyKey: 'idemp-no-wallet',
 				providerId: 'provider-a',
@@ -410,7 +438,7 @@ describe('ProcessWagerTransactionUseCase', () => {
 	});
 
 	it('should throw CurrencyMismatchError when currency does not match wallet currency', async () => {
-		await expect(
+		expect(
 			sut.execute({
 				idempotencyKey: 'idemp-currency',
 				providerId: 'provider-a',
