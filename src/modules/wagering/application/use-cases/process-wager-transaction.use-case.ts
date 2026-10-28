@@ -114,45 +114,66 @@ export class ProcessWagerTransactionUseCase {
 		const existingTransaction = await this.wageringRepository.findByIdempotencyKey(input.idempotencyKey);
 		if (existingTransaction) return this.handleIdempotentReplay(existingTransaction, payloadHash, money);
 
-		await this.assertNoDuplicateExternalTransaction(
+		const existingByExternal = await this.assertNoDuplicateExternalTransaction(
 			input.providerId,
 			input.externalTransactionId,
 			input.idempotencyKey
 		);
+		if (existingByExternal) return this.handleIdempotentReplay(existingByExternal, payloadHash, money);
 
-		return this.entityManager.transactional(async () => {
-			const wallet = await this.loadAndValidateWallet(input.walletId, input.playerId, money.currency);
-			const transaction = this.createTransaction(input, money, payloadHash);
+		try {
+			return await this.entityManager.transactional(async () => {
+				const existingInside = await this.wageringRepository.findByIdempotencyKey(input.idempotencyKey);
+				if (existingInside) return this.handleIdempotentReplay(existingInside, payloadHash, money);
 
-			const ledgerEntry = await this.applyOperation(wallet, transaction);
+				const wallet = await this.loadAndValidateWallet(input.walletId, input.playerId, money.currency);
+				const transaction = this.createTransaction(input, money, payloadHash);
 
-			if (ledgerEntry) {
-				await this.walletRepository.update(wallet);
-				await this.ledgerRepository.create(ledgerEntry);
+				const ledgerEntry = await this.applyOperation(wallet, transaction);
+
+				if (ledgerEntry) {
+					await this.walletRepository.update(wallet);
+					await this.ledgerRepository.create(ledgerEntry);
+				}
+
+				await this.wageringRepository.create(transaction);
+				await this.outboxService.enqueue(transaction, wallet.id, wallet.balance);
+
+				if (input.inboxMessage && this.inboxRepository) {
+					const inbox = InboxMessage.receive({
+						messageId: input.inboxMessage.messageId,
+						consumerName: input.inboxMessage.consumerName,
+						payloadHash
+					});
+
+					inbox.markProcessed();
+					await this.inboxRepository.create(inbox);
+				}
+
+				return {
+					transactionId: transaction.id,
+					status: transaction.status,
+					failureCode: transaction.failureCode,
+					balance: wallet.balance.toJSON(),
+					idempotentReplay: false
+				};
+			});
+		} catch (error) {
+			this.entityManager.clear?.();
+
+			const isUniqueViolation =
+				(error as any)?.code === '23505' ||
+				(error as any)?.name === 'UniqueConstraintViolationException';
+
+			if (isUniqueViolation) {
+				const concurrentTransaction = await this.wageringRepository.findByIdempotencyKey(input.idempotencyKey);
+				if (concurrentTransaction) {
+					return this.handleIdempotentReplay(concurrentTransaction, payloadHash, money);
+				}
 			}
 
-			await this.wageringRepository.create(transaction);
-			await this.outboxService.enqueue(transaction, wallet.id, wallet.balance);
-
-			if (input.inboxMessage && this.inboxRepository) {
-				const inbox = InboxMessage.receive({
-					messageId: input.inboxMessage.messageId,
-					consumerName: input.inboxMessage.consumerName,
-					payloadHash
-				});
-
-				inbox.markProcessed();
-				await this.inboxRepository.create(inbox);
-			}
-
-			return {
-				transactionId: transaction.id,
-				status: transaction.status,
-				failureCode: transaction.failureCode,
-				balance: wallet.balance.toJSON(),
-				idempotentReplay: false
-			};
-		});
+			throw error;
+		}
 	}
 
 	private computePayloadHash(input: ProcessWagerTransactionInput, money: Money): string {
@@ -204,9 +225,15 @@ export class ProcessWagerTransactionUseCase {
 		providerId: string,
 		externalTransactionId: string,
 		idempotencyKey: string
-	): Promise<void> {
+	): Promise<WagerTransaction | null> {
 		const existing = await this.wageringRepository.findByProviderAndExternalId(providerId, externalTransactionId);
-		if (existing) throw new IdempotencyConflictError(idempotencyKey);
+		if (existing) {
+			if (existing.idempotencyKey !== idempotencyKey) {
+				throw new IdempotencyConflictError(idempotencyKey);
+			}
+			return existing;
+		}
+		return null;
 	}
 
 	private async loadAndValidateWallet(walletId: string, playerId: string, expectedCurrency: string): Promise<Wallet> {
