@@ -1,6 +1,7 @@
 import { EntityManager } from '@mikro-orm/postgresql';
 import { Inject, Injectable, Logger, type OnApplicationBootstrap, type OnApplicationShutdown } from '@nestjs/common';
 
+import { MetricsService } from '@/core/observability/services/metrics.service';
 import { settings } from '@/core/settings';
 
 import type { IWalletLedgerEntryRepository } from '@/modules/wallet/domain/wallet-ledger-entry.repository.interface';
@@ -18,7 +19,6 @@ import { WAGERING_TOKENS } from '../../wagering.tokens';
 @Injectable()
 export class PendingReferenceWorker implements OnApplicationBootstrap, OnApplicationShutdown {
 	private readonly logger = new Logger(PendingReferenceWorker.name);
-
 	private timer?: NodeJS.Timeout;
 	private isProcessing = false;
 	private isRunning = false;
@@ -38,7 +38,8 @@ export class PendingReferenceWorker implements OnApplicationBootstrap, OnApplica
 		private readonly outboxService: WageringOutboxService,
 		private readonly refundOperation: RefundOperation,
 		private readonly rollbackOperation: RollbackOperation,
-		private readonly entityManager: EntityManager
+		private readonly entityManager: EntityManager,
+		private readonly metricsService: MetricsService
 	) {
 		this.operations = {
 			[WagerTransactionKind.Refund]: this.refundOperation,
@@ -60,7 +61,14 @@ export class PendingReferenceWorker implements OnApplicationBootstrap, OnApplica
 		if (this.isRunning) return;
 		this.isRunning = true;
 
-		this.timer = setInterval(() => this.processPendingReferences(), intervalMs);
+		this.timer = setInterval(() => {
+			this.processPendingReferences().catch(err => {
+				this.logger.error(
+					`Unexpected error during pending reference resolution cycle: ${(err as Error).message}`,
+					(err as Error).stack
+				);
+			});
+		}, intervalMs);
 	}
 
 	stop(): void {
@@ -87,8 +95,15 @@ export class PendingReferenceWorker implements OnApplicationBootstrap, OnApplica
 					const resolved = await this.resolvePendingTransaction(transaction, now, ttl);
 					if (resolved) resolvedCount++;
 				} catch (error) {
+					this.entityManager.clear?.();
 					this.logger.error(
-						`Failed to reprocess pending transaction ${transaction.id}: ${(error as Error).message}`
+						`Failed to reprocess pending transaction ${transaction.id}: ${(error as Error).message}`,
+						(error as Error).stack,
+						{
+							transactionId: transaction.id,
+							walletId: transaction.walletId,
+							providerId: transaction.providerId
+						}
 					);
 				}
 			}
@@ -105,10 +120,11 @@ export class PendingReferenceWorker implements OnApplicationBootstrap, OnApplica
 			if (!currentTransaction || currentTransaction.status !== WagerTransactionStatus.PendingReference)
 				return false;
 
-			const wallet = await this.walletRepository.findById(currentTransaction.walletId);
+			const wallet = await this.walletRepository.findByIdWithLock(currentTransaction.walletId);
 			if (!wallet) {
 				currentTransaction.reject('REFERENCE_NOT_FOUND');
 				await this.wageringRepository.update(currentTransaction);
+				this.metricsService.recordTransaction(currentTransaction.status);
 				return true;
 			}
 
@@ -125,6 +141,7 @@ export class PendingReferenceWorker implements OnApplicationBootstrap, OnApplica
 					currentTransaction.reject('REFERENCE_NOT_FOUND');
 					await this.wageringRepository.update(currentTransaction);
 					await this.outboxService.enqueue(currentTransaction, wallet.id, wallet.balance);
+					this.metricsService.recordTransaction(currentTransaction.status);
 					return true;
 				}
 			}
@@ -134,7 +151,10 @@ export class PendingReferenceWorker implements OnApplicationBootstrap, OnApplica
 
 			const ledgerEntry = await operation.execute(wallet, currentTransaction);
 
-			if (currentTransaction.status === WagerTransactionStatus.PendingReference) return false;
+			if (currentTransaction.status === WagerTransactionStatus.PendingReference) {
+				this.metricsService.recordRetry('pending_reference');
+				return false;
+			}
 
 			if (ledgerEntry) {
 				await this.walletRepository.update(wallet);
@@ -143,6 +163,13 @@ export class PendingReferenceWorker implements OnApplicationBootstrap, OnApplica
 
 			await this.wageringRepository.update(currentTransaction);
 			await this.outboxService.enqueue(currentTransaction, wallet.id, wallet.balance);
+			this.metricsService.recordTransaction(currentTransaction.status);
+
+			this.logger.log(`Pending reference resolved for transaction ${currentTransaction.id}`, {
+				transactionId: currentTransaction.id,
+				walletId: currentTransaction.walletId,
+				providerId: currentTransaction.providerId
+			});
 
 			return true;
 		});

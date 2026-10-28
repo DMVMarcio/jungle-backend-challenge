@@ -1,6 +1,7 @@
 import { EntityManager } from '@mikro-orm/postgresql';
 import { beforeEach, describe, expect, it } from 'bun:test';
 
+import { MetricsService } from '@/core/observability/services/metrics.service';
 import { OutboxMemoryRepository } from '@/modules/outbox/infrastructure/database/outbox.memory.repository';
 import {
 	WagerTransaction,
@@ -47,6 +48,7 @@ describe('Pending Reference Worker', () => {
 		const outboxService = new WageringOutboxService(outboxRepository, idGenerator);
 		const refundOperation = new RefundOperation(wageringRepository);
 		const rollbackOperation = new RollbackOperation(wageringRepository);
+		const metricsService = new MetricsService();
 
 		sut = new PendingReferenceWorker(
 			wageringRepository,
@@ -55,7 +57,8 @@ describe('Pending Reference Worker', () => {
 			outboxService,
 			refundOperation,
 			rollbackOperation,
-			entityManager
+			entityManager,
+			metricsService
 		);
 
 		const wallet = Wallet.open({
