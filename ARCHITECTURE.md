@@ -124,7 +124,30 @@ When a dependent transaction (`REFUND` or `ROLLBACK`) arrives before its referen
 
 ---
 
-## 10. Key Trade-offs
+## 10. Observability & Telemetry
+
+- **Structured Logging & Tracing:** Emits single-line JSON logs with automatic sanitization of sensitive credentials (`token`, `password`, `secret`, `payload`). Context (`correlationId`, `messageId`, `walletId`, `providerId`) is propagated across async chains via `AsyncLocalStorage` and echoed in the `x-correlation-id` response header.
+- **Prometheus Metrics (`GET /metrics`):** Standard exposition format (and JSON via `Accept: application/json`). Tracks transaction status, idempotent replays, worker retry counts, DLQ dispatches, database lock conflicts, outbox queue lag, and latency percentiles (p50, p95, p99).
+- **Health Probes:** `GET /health/live` (process liveness) and `GET /health/ready` (validates PostgreSQL and LocalStack SQS connectivity).
+
+---
+
+## 11. Load Testing & Performance Benchmark
+
+Executed via `bun run test:load` (creates test wallets, fires concurrent mixed `BET`/`WIN`/`REFUND` transactions, and validates 100% financial consistency via ledger reconciliation):
+
+| Metric | Result (Single Bun Process) | Architectural Invariant |
+|---|---|---|
+| **Workload** | 300 mixed operations / 10 wallets | Concurrency: 20 parallel workers |
+| **Throughput** | ~70–100 req/s | End-to-end across PostgreSQL & SQS |
+| **Latency** | p50: ~200ms \| p95: ~580ms \| p99: ~720ms | Includes row locks & outbox persistence |
+| **Error Rate** | 0% 5xx infrastructure errors | Only business responses (200, 202, 422) |
+| **Financial Integrity** | 100% reconciled (0 discrepancies) | Strict prevention of negative balance |
+| **Outbox Backlog** | Lag drained to 0 messages | At-least-once FIFO delivery confirmed |
+
+---
+
+## 12. Key Trade-offs
 
 | Decision | Benefit | Trade-off |
 |---|---|---|

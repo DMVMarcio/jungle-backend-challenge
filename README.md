@@ -78,13 +78,24 @@ bun test
 bun run typecheck
 ```
 
+### Run Concurrency Load Test
+
+Runs an automated high-concurrency burst of mixed wagering operations against the live application, computing throughput, p50/p95/p99 latency, and verifying 100% financial reconciliation:
+
+```bash
+bun run test:load
+```
+
 ---
 
 ## API Overview
 
-### Health Checks
+### Health Checks & Observability
 - `GET /health/live` — Service liveness probe.
 - `GET /health/ready` — Service readiness probe (checks PostgreSQL and SQS connectivity).
+- `GET /metrics` — Prometheus metrics exposition endpoint (supports `Accept: application/json` for JSON snapshot).
+
+All HTTP requests support and echo the `x-correlation-id` header for distributed tracing and structured log aggregation.
 
 ### Wallets
 - `POST /wallets` — Opens a new player wallet with optional initial balance.
