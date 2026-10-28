@@ -1,12 +1,13 @@
 import { Module } from '@nestjs/common';
 
 import { DatabaseModule } from './core/database/database.module';
+import { InboxModule } from './modules/inbox/inbox.module';
 import { OutboxModule } from './modules/outbox/outbox.module';
 import { WageringModule } from './modules/wagering/wagering.module';
 import { WalletModule } from './modules/wallet/wallet.module';
 import { SharedModule } from './shared/shared.module';
 
 @Module({
-	imports: [DatabaseModule, SharedModule, OutboxModule, WalletModule, WageringModule]
+	imports: [DatabaseModule, SharedModule, InboxModule, OutboxModule, WalletModule, WageringModule]
 })
 export class AppModule {}
