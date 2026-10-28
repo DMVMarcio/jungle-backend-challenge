@@ -40,10 +40,11 @@ export class WalletMikroOrmRepository implements IWalletRepository {
 	}
 
 	async update(wallet: Wallet): Promise<void> {
-		const persistenceData = WalletMapper.toPersistence(wallet);
 		const record = await this.entityManager.findOne(WalletSchema, { id: wallet.id });
+		if (!record) return;
 
-		if (record) this.entityManager.assign(record, persistenceData);
+		const { id, version, createdAt, ...updatableData } = WalletMapper.toPersistence(wallet);
+		this.entityManager.assign(record, updatableData);
 
 		await this.entityManager.flush();
 	}
