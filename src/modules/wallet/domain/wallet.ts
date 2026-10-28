@@ -72,7 +72,7 @@ export class Wallet {
 		return this._updatedAt;
 	}
 
-	credit(money: Money, transaction_id: string): WalletLedgerEntry {
+	credit(money: Money, transactionId: string): WalletLedgerEntry {
 		this.assertSameCurrency(money);
 
 		const balanceBefore = this._balance;
@@ -84,7 +84,7 @@ export class Wallet {
 
 		return WalletLedgerEntry.create({
 			walletId: this.id,
-			transactionId: transaction_id,
+			transactionId,
 			direction: LedgerDirection.Credit,
 			money,
 			balanceBefore,
@@ -93,7 +93,7 @@ export class Wallet {
 		});
 	}
 
-	debit(money: Money, transaction_id: string): WalletLedgerEntry {
+	debit(money: Money, transactionId: string): WalletLedgerEntry {
 		this.assertSameCurrency(money);
 
 		if (this._balance.isLessThan(money))
@@ -108,7 +108,7 @@ export class Wallet {
 
 		return WalletLedgerEntry.create({
 			walletId: this.id,
-			transactionId: transaction_id,
+			transactionId,
 			direction: LedgerDirection.Debit,
 			money,
 			balanceBefore,

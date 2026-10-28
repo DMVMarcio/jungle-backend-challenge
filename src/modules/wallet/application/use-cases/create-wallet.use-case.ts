@@ -65,44 +65,53 @@ export class CreateWalletUseCase {
 			initialBalance: initialMoney
 		});
 
-		if (initialMoney.isPositive()) {
-			const openingTransactionId = this.idGenerator.generate();
+		try {
+			if (initialMoney.isPositive()) {
+				const openingTransactionId = this.idGenerator.generate();
 
-			const ledgerEntry = WalletLedgerEntry.create({
-				id: this.idGenerator.generate(),
-				walletId: wallet.id,
-				transactionId: openingTransactionId,
-				direction: LedgerDirection.Credit,
-				money: initialMoney,
-				balanceBefore: Money.zero(initialMoney.currency),
-				balanceAfter: initialMoney,
-				createdAt: wallet.createdAt
-			});
+				const ledgerEntry = WalletLedgerEntry.create({
+					id: this.idGenerator.generate(),
+					walletId: wallet.id,
+					transactionId: openingTransactionId,
+					direction: LedgerDirection.Credit,
+					money: initialMoney,
+					balanceBefore: Money.zero(initialMoney.currency),
+					balanceAfter: initialMoney,
+					createdAt: wallet.createdAt
+				});
 
-			const openingTransaction = WagerTransaction.create({
-				id: openingTransactionId,
-				providerId: 'internal',
-				externalTransactionId: `opening-${wallet.id}`,
-				idempotencyKey: `opening:${wallet.id}`,
-				payloadHash: 'internal-opening-balance',
-				walletId: wallet.id,
-				playerId: wallet.playerId,
-				roundId: 'opening',
-				gameId: 'internal',
-				kind: WagerTransactionKind.Opening,
-				money: initialMoney,
-				createdAt: wallet.createdAt
-			});
+				const openingTransaction = WagerTransaction.create({
+					id: openingTransactionId,
+					providerId: 'internal',
+					externalTransactionId: `opening-${wallet.id}`,
+					idempotencyKey: `opening:${wallet.id}`,
+					payloadHash: 'internal-opening-balance',
+					walletId: wallet.id,
+					playerId: wallet.playerId,
+					roundId: 'opening',
+					gameId: 'internal',
+					kind: WagerTransactionKind.Opening,
+					money: initialMoney,
+					createdAt: wallet.createdAt
+				});
 
-			openingTransaction.markProcessed(undefined, wallet.createdAt);
+				openingTransaction.markProcessed(undefined, wallet.createdAt);
 
-			await this.entityManager.transactional(async () => {
+				await this.entityManager.transactional(async () => {
+					await this.walletRepository.create(wallet);
+					await this.ledgerRepository.create(ledgerEntry);
+					await this.wageringRepository.create(openingTransaction);
+				});
+			} else {
 				await this.walletRepository.create(wallet);
-				await this.ledgerRepository.create(ledgerEntry);
-				await this.wageringRepository.create(openingTransaction);
-			});
-		} else {
-			await this.walletRepository.create(wallet);
+			}
+		} catch (error) {
+			this.entityManager.clear?.();
+			const dbError = error as { code?: string; name?: string } | null | undefined;
+			if (dbError?.code === '23505' || dbError?.name === 'UniqueConstraintViolationException') {
+				throw new WalletAlreadyExistsError(input.playerId, initialMoney.currency);
+			}
+			throw error;
 		}
 
 		return {
