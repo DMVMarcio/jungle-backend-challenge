@@ -46,13 +46,11 @@ export class WagerTransactionMikroOrmRepository implements IWagerTransactionRepo
 		referenceTransactionId: string,
 		kind?: WagerTransactionKind
 	): Promise<WagerTransaction | null> {
-		const whereClause: Record<string, any> = {
+		const record = await this.entityManager.findOne(WagerTransactionSchema, {
 			referenceTransactionId,
-			status: WagerTransactionStatus.Processed
-		};
-		if (kind) whereClause.kind = kind;
-
-		const record = await this.entityManager.findOne(WagerTransactionSchema, whereClause);
+			status: WagerTransactionStatus.Processed,
+			kind: kind ?? { $in: [WagerTransactionKind.Refund, WagerTransactionKind.Rollback] }
+		});
 		if (!record) return null;
 
 		return WagerTransactionMapper.toDomain(record);

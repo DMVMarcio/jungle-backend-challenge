@@ -1,8 +1,9 @@
 import { Inject, Injectable } from '@nestjs/common';
 
 import { Wallet } from '@/modules/wallet/domain/wallet';
-import { WalletLedgerEntry } from '@/modules/wallet/domain/wallet-ledger-entry';
-import { WagerTransaction, WagerTransactionKind } from '../../domain/wager-transaction';
+import { LedgerDirection, WalletLedgerEntry } from '@/modules/wallet/domain/wallet-ledger-entry';
+
+import { WagerTransaction } from '../../domain/wager-transaction';
 import type { IWagerTransactionRepository } from '../../domain/wager-transaction.repository.interface';
 import { WAGERING_TOKENS } from '../../wagering.tokens';
 import { IWageringOperation } from './wagering-operation.interface';
@@ -31,16 +32,14 @@ export class RollbackOperation implements IWageringOperation {
 			return undefined;
 		}
 
-		const alreadyReversed = await this.wageringRepository.findProcessedByReferenceId(
-			referenceTransaction.id,
-			WagerTransactionKind.Rollback
-		);
+		const alreadyReversed = await this.wageringRepository.findProcessedByReferenceId(referenceTransaction.id);
 		if (alreadyReversed) {
 			transaction.reject('REFERENCE_ALREADY_REVERSED');
 			return undefined;
 		}
 
-		if (referenceTransaction.kind === WagerTransactionKind.Bet) {
+		const direction = transaction.ledgerDirectionFor(referenceTransaction);
+		if (direction === LedgerDirection.Credit) {
 			const entry = wallet.credit(transaction.money, transaction.id);
 			transaction.markProcessed(referenceTransaction.id);
 			return entry;

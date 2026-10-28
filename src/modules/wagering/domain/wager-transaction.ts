@@ -224,7 +224,10 @@ export class WagerTransaction {
 
 		if (reference.status !== WagerTransactionStatus.Processed) return 'REFERENCE_NOT_FOUND';
 
-		if (this.kind === WagerTransactionKind.Refund && reference.kind !== WagerTransactionKind.Bet)
+		if (
+			(this.kind === WagerTransactionKind.Refund || this.kind === WagerTransactionKind.Win) &&
+			reference.kind !== WagerTransactionKind.Bet
+		)
 			return 'INVALID_REFERENCE_KIND';
 
 		if (
@@ -235,7 +238,11 @@ export class WagerTransaction {
 		)
 			return 'INVALID_REFERENCE_KIND';
 
-		if (!reference.money.equals(this.money)) return 'AMOUNT_MISMATCH';
+		if (
+			(this.kind === WagerTransactionKind.Refund || this.kind === WagerTransactionKind.Rollback) &&
+			!reference.money.equals(this.money)
+		)
+			return 'AMOUNT_MISMATCH';
 
 		return null;
 	}

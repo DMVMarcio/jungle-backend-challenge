@@ -2,7 +2,8 @@ import { Inject, Injectable } from '@nestjs/common';
 
 import { Wallet } from '@/modules/wallet/domain/wallet';
 import { WalletLedgerEntry } from '@/modules/wallet/domain/wallet-ledger-entry';
-import { WagerTransaction, WagerTransactionKind } from '../../domain/wager-transaction';
+
+import { WagerTransaction } from '../../domain/wager-transaction';
 import type { IWagerTransactionRepository } from '../../domain/wager-transaction.repository.interface';
 import { WAGERING_TOKENS } from '../../wagering.tokens';
 import { IWageringOperation } from './wagering-operation.interface';
@@ -31,10 +32,7 @@ export class RefundOperation implements IWageringOperation {
 			return undefined;
 		}
 
-		const alreadyReversed = await this.wageringRepository.findProcessedByReferenceId(
-			referenceTransaction.id,
-			WagerTransactionKind.Refund
-		);
+		const alreadyReversed = await this.wageringRepository.findProcessedByReferenceId(referenceTransaction.id);
 		if (alreadyReversed) {
 			transaction.reject('REFERENCE_ALREADY_REVERSED');
 			return undefined;

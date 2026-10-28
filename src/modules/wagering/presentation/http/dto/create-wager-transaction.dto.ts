@@ -16,6 +16,7 @@ export const createWagerTransactionSchema = z
 	.object({
 		providerId: z.string().trim().min(1, 'is required'),
 		externalTransactionId: z.string().trim().min(1, 'is required'),
+		idempotencyKey: z.string().trim().min(1).optional(),
 		playerId: z.uuid(),
 		walletId: z.uuid(),
 		roundId: z.string().trim().min(1, 'is required'),

@@ -39,7 +39,9 @@ export class WagerTransactionMemoryRepository implements IWagerTransactionReposi
 				item =>
 					item.referenceTransactionId === referenceTransactionId &&
 					item.status === WagerTransactionStatus.Processed &&
-					(!kind || item.kind === kind)
+					(kind
+						? item.kind === kind
+						: item.kind === WagerTransactionKind.Refund || item.kind === WagerTransactionKind.Rollback)
 			) ?? null
 		);
 	}

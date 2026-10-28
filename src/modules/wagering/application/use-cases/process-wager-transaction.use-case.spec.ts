@@ -58,7 +58,7 @@ describe('ProcessWagerTransactionUseCase', () => {
 
 		const outboxService = new WageringOutboxService(outboxRepository, idGenerator);
 		const betOperation = new BetOperation();
-		const winOperation = new WinOperation();
+		const winOperation = new WinOperation(wageringRepository);
 		const lossOperation = new LossOperation();
 		const refundOperation = new RefundOperation(wageringRepository);
 		const rollbackOperation = new RollbackOperation(wageringRepository);
@@ -170,6 +170,55 @@ describe('ProcessWagerTransactionUseCase', () => {
 		expect(ledgerEntries[0].direction).toBe(LedgerDirection.Credit);
 
 		expect(outboxRepository.items[0].eventType).toBe('WagerTransactionProcessed');
+	});
+
+	it('should validate and link referenceTransactionId when WIN provides referenceExternalTransactionId', async () => {
+		const betResult = await sut.execute({
+			idempotencyKey: 'idemp-bet-for-win',
+			providerId: 'provider-a',
+			externalTransactionId: 'transaction-bet-for-win',
+			playerId: testPlayerId,
+			walletId: testWalletId,
+			roundId: 'round-win-ref',
+			gameId: 'game-1',
+			kind: WagerTransactionKind.Bet,
+			money: { amount: '10.00', currency: 'BRL' }
+		});
+
+		const winResult = await sut.execute({
+			idempotencyKey: 'idemp-win-with-ref',
+			providerId: 'provider-a',
+			externalTransactionId: 'transaction-win-with-ref',
+			playerId: testPlayerId,
+			walletId: testWalletId,
+			roundId: 'round-win-ref',
+			gameId: 'game-1',
+			kind: WagerTransactionKind.Win,
+			money: { amount: '40.00', currency: 'BRL' },
+			referenceExternalTransactionId: 'transaction-bet-for-win'
+		});
+
+		expect(winResult.status).toBe(WagerTransactionStatus.Processed);
+		expect(winResult.balance).toEqual({ amount: '130.00', currency: 'BRL' });
+
+		const winTx = await wageringRepository.findById(winResult.transactionId);
+		expect(winTx?.referenceTransactionId).toBe(betResult.transactionId);
+
+		const invalidWinResult = await sut.execute({
+			idempotencyKey: 'idemp-win-wrong-round',
+			providerId: 'provider-a',
+			externalTransactionId: 'transaction-win-wrong-round',
+			playerId: testPlayerId,
+			walletId: testWalletId,
+			roundId: 'different-round',
+			gameId: 'game-1',
+			kind: WagerTransactionKind.Win,
+			money: { amount: '40.00', currency: 'BRL' },
+			referenceExternalTransactionId: 'transaction-bet-for-win'
+		});
+
+		expect(invalidWinResult.status).toBe(WagerTransactionStatus.Rejected);
+		expect(invalidWinResult.failureCode).toBe('REFERENCE_NOT_FOUND');
 	});
 
 	it('should process a LOSS without changing balance or ledger', async () => {
@@ -306,7 +355,7 @@ describe('ProcessWagerTransactionUseCase', () => {
 		expect(walletAfter?.balance.toJSON()).toEqual({ amount: '100.00', currency: 'BRL' });
 	});
 
-	it('should reject duplicate REFUND on already reversed transaction', async () => {
+	it('should reject duplicate REFUND or cross ROLLBACK on already reversed BET', async () => {
 		await sut.execute({
 			idempotencyKey: 'idemp-bet-dup',
 			providerId: 'provider-a',
@@ -347,6 +396,23 @@ describe('ProcessWagerTransactionUseCase', () => {
 
 		expect(secondRefund.status).toBe(WagerTransactionStatus.Rejected);
 		expect(secondRefund.failureCode).toBe('REFERENCE_ALREADY_REVERSED');
+
+		const crossRollback = await sut.execute({
+			idempotencyKey: 'idemp-rollback-cross',
+			providerId: 'provider-a',
+			externalTransactionId: 'transaction-rollback-cross',
+			playerId: testPlayerId,
+			walletId: testWalletId,
+			roundId: 'round-1',
+			gameId: 'game-1',
+			kind: WagerTransactionKind.Rollback,
+			money: { amount: '20.00', currency: 'BRL' },
+			referenceExternalTransactionId: 'transaction-bet-dup'
+		});
+
+		expect(crossRollback.status).toBe(WagerTransactionStatus.Rejected);
+		expect(crossRollback.failureCode).toBe('REFERENCE_ALREADY_REVERSED');
+		expect(crossRollback.balance).toEqual({ amount: '100.00', currency: 'BRL' });
 	});
 
 	it('should reject ROLLBACK with NEGATIVE_BALANCE_PREVENTED if reversing a WIN would make balance negative', async () => {

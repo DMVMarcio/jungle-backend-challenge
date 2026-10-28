@@ -1,4 +1,16 @@
-import { Body, Controller, Get, Headers, HttpStatus, Param, Post, Res, UseGuards, UsePipes } from '@nestjs/common';
+import {
+	BadRequestException,
+	Body,
+	Controller,
+	Get,
+	Headers,
+	HttpStatus,
+	Param,
+	Post,
+	Res,
+	UseGuards,
+	UsePipes
+} from '@nestjs/common';
 import type { FastifyReply } from 'fastify';
 
 import { ProviderAuthGuard } from '@/core/auth/guards/provider-auth.guard';
@@ -34,7 +46,20 @@ export class WageringController {
 		@Body() body: CreateWagerTransactionDto,
 		@Res({ passthrough: true }) res: FastifyReply
 	) {
-		const idempotencyKey = idempotencyKeyHeader?.trim() || `${body.providerId}:${body.externalTransactionId}`;
+		const idempotencyKey = idempotencyKeyHeader?.trim();
+		if (!idempotencyKey) {
+			throw new BadRequestException({
+				code: 'VALIDATION_ERROR',
+				message: 'Idempotency-Key header is required'
+			});
+		}
+
+		if (body.idempotencyKey && body.idempotencyKey !== idempotencyKey) {
+			throw new BadRequestException({
+				code: 'VALIDATION_ERROR',
+				message: 'Body idempotencyKey must match Idempotency-Key header'
+			});
+		}
 
 		const result = await this.processWagerTransactionUseCase.execute({
 			...body,

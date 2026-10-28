@@ -2,7 +2,6 @@ import { EntityManager } from '@mikro-orm/postgresql';
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 
 import { MetricsService } from '@/core/observability/services/metrics.service';
-
 import { InboxMessage } from '@/modules/inbox/domain/inbox-message';
 import type { IInboxRepository } from '@/modules/inbox/domain/inbox.repository.interface';
 import { INBOX_TOKENS } from '@/modules/inbox/inbox.tokens';
@@ -185,7 +184,8 @@ export class ProcessWagerTransactionUseCase {
 
 			const databaseException = error as { code?: string; name?: string } | null | undefined;
 			const isUniqueViolation =
-				databaseException?.code === '23505' || databaseException?.name === 'UniqueConstraintViolationException';
+				databaseException?.code === '23505' ||
+				databaseException?.name === 'UniqueConstraintViolationException';
 
 			if (isUniqueViolation) {
 				this.metricsService.recordLockConflict();
@@ -193,6 +193,18 @@ export class ProcessWagerTransactionUseCase {
 				if (concurrentTransaction) {
 					this.metricsService.recordDuplicate('idempotency');
 					return this.handleIdempotentReplay(concurrentTransaction, payloadHash, money);
+				}
+
+				const concurrentByExternal = await this.wageringRepository.findByProviderAndExternalId(
+					input.providerId,
+					input.externalTransactionId
+				);
+				if (concurrentByExternal) {
+					this.metricsService.recordDuplicate('idempotency');
+					if (concurrentByExternal.idempotencyKey !== input.idempotencyKey) {
+						throw new IdempotencyConflictError(input.idempotencyKey);
+					}
+					return this.handleIdempotentReplay(concurrentByExternal, payloadHash, money);
 				}
 			}
 
@@ -275,11 +287,7 @@ export class ProcessWagerTransactionUseCase {
 		return wallet;
 	}
 
-	private createTransaction(
-		input: ProcessWagerTransactionInput,
-		money: Money,
-		payloadHash: string
-	): WagerTransaction {
+	private createTransaction(input: ProcessWagerTransactionInput, money: Money, payloadHash: string): WagerTransaction {
 		const id = this.idGenerator.generate();
 		return WagerTransaction.create({
 			id,
