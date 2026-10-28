@@ -3,6 +3,7 @@ import { EntityManager } from '@mikro-orm/postgresql';
 import { Logger } from '@nestjs/common';
 import { beforeEach, describe, expect, it, mock, spyOn } from 'bun:test';
 
+import { MetricsService } from '@/core/observability/services/metrics.service';
 import type { SqsClientService } from '@/core/sqs/sqs-client.service';
 
 import { OutboxMessage } from '../../domain/outbox-message';
@@ -13,6 +14,7 @@ describe('Outbox Publisher Worker', () => {
 	let sut: OutboxPublisherWorker;
 
 	let outboxRepository: OutboxMemoryRepository;
+	let metricsService: MetricsService;
 
 	let mockSqsClient: { send: ReturnType<typeof mock> };
 	let mockSqsClientService: SqsClientService;
@@ -20,6 +22,7 @@ describe('Outbox Publisher Worker', () => {
 
 	beforeEach(() => {
 		outboxRepository = new OutboxMemoryRepository();
+		metricsService = new MetricsService();
 
 		mockSqsClient = { send: mock() };
 		mockSqsClientService = {
@@ -31,7 +34,7 @@ describe('Outbox Publisher Worker', () => {
 			transactional: async <T>(cb: (em: EntityManager) => Promise<T>): Promise<T> => cb(entityManager)
 		} as unknown as EntityManager;
 
-		sut = new OutboxPublisherWorker(outboxRepository, mockSqsClientService, entityManager);
+		sut = new OutboxPublisherWorker(outboxRepository, mockSqsClientService, entityManager, metricsService);
 	});
 
 	it('should publish pending due messages and mark them published', async () => {

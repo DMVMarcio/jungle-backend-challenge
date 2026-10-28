@@ -2,6 +2,7 @@ import { SendMessageCommand } from '@aws-sdk/client-sqs';
 import { EntityManager } from '@mikro-orm/postgresql';
 import { Inject, Injectable, Logger, OnApplicationBootstrap, OnApplicationShutdown } from '@nestjs/common';
 
+import { MetricsService } from '@/core/observability/services/metrics.service';
 import { settings } from '@/core/settings';
 import { SqsClientService } from '@/core/sqs/sqs-client.service';
 
@@ -19,7 +20,8 @@ export class OutboxPublisherWorker implements OnApplicationBootstrap, OnApplicat
 		@Inject(OUTBOX_TOKENS.REPOSITORY)
 		private readonly outboxRepository: IOutboxRepository,
 		private readonly sqsClientService: SqsClientService,
-		private readonly entityManager: EntityManager
+		private readonly entityManager: EntityManager,
+		private readonly metricsService: MetricsService
 	) {}
 
 	onApplicationBootstrap(): void {
@@ -36,7 +38,14 @@ export class OutboxPublisherWorker implements OnApplicationBootstrap, OnApplicat
 		if (this.isRunning) return;
 		this.isRunning = true;
 
-		this.timer = setInterval(() => this.processPendingMessages(), intervalMs);
+		this.timer = setInterval(() => {
+			this.processPendingMessages().catch(err => {
+				this.logger.error(
+					`Unexpected error during outbox publishing cycle: ${(err as Error).message}`,
+					(err as Error).stack
+				);
+			});
+		}, intervalMs);
 	}
 
 	stop(): void {
@@ -53,6 +62,9 @@ export class OutboxPublisherWorker implements OnApplicationBootstrap, OnApplicat
 		this.isProcessing = true;
 
 		try {
+			const lag = await this.outboxRepository.countPending();
+			this.metricsService.setOutboxLag(lag);
+
 			return await this.entityManager.transactional(async () => {
 				const pendingMessages = await this.outboxRepository.findPendingDue(batchSize);
 				if (pendingMessages.length === 0) return 0;
@@ -76,8 +88,20 @@ export class OutboxPublisherWorker implements OnApplicationBootstrap, OnApplicat
 							);
 
 							message.markPublished();
+							this.logger.log(`Outbox message published`, {
+								messageId: message.id,
+								transactionId: message.aggregateId
+							});
 						} catch (error) {
-							this.logger.error(`Failed to publish message ${message.id}: ${(error as Error).message}`);
+							this.logger.error(
+								`Failed to publish message ${message.id}: ${(error as Error).message}`,
+								(error as Error).stack,
+								{
+									messageId: message.id,
+									transactionId: message.aggregateId
+								}
+							);
+							this.metricsService.recordRetry('outbox');
 							message.scheduleRetry();
 						}
 
