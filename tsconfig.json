@@ -15,5 +15,5 @@
 			"@/*": ["./src/*"]
 		}
 	},
-	"include": ["src/**/*", "mikro-orm.config.ts"]
+	"include": ["src/**/*", "test/**/*", "mikro-orm.config.ts"]
 }
