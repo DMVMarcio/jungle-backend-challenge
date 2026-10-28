@@ -12,7 +12,10 @@ export const appSettingsSchema = z.object({
 });
 
 export const settings = appSettingsSchema.parse({
-	nodeEnv: process.env.NODE_ENV,
+	nodeEnv:
+		process.env.NODE_ENV ??
+		process.env.BUN_ENV ??
+		(process.argv.some(arg => arg.includes('test')) ? 'test' : 'development'),
 	server: {
 		port: process.env.PORT ?? process.env.SERVER_PORT,
 		host: process.env.HOST ?? process.env.SERVER_HOST
