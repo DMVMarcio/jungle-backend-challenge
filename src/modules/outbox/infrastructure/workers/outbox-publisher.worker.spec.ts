@@ -1,3 +1,4 @@
+import type { SQSClient } from '@aws-sdk/client-sqs';
 import { EntityManager } from '@mikro-orm/postgresql';
 import { Logger } from '@nestjs/common';
 import { beforeEach, describe, expect, it, mock, spyOn } from 'bun:test';
@@ -22,12 +23,12 @@ describe('Outbox Publisher Worker', () => {
 
 		mockSqsClient = { send: mock() };
 		mockSqsClientService = {
-			client: mockSqsClient as any,
+			client: mockSqsClient as unknown as SQSClient,
 			onModuleDestroy: () => {}
 		};
 
 		entityManager = {
-			transactional: async (cb: (em: any) => Promise<any>) => cb(entityManager)
+			transactional: async <T>(cb: (em: EntityManager) => Promise<T>): Promise<T> => cb(entityManager)
 		} as unknown as EntityManager;
 
 		sut = new OutboxPublisherWorker(outboxRepository, mockSqsClientService, entityManager);

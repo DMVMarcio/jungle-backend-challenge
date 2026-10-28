@@ -1,4 +1,10 @@
-import { DeleteMessageCommand, type Message, ReceiveMessageCommand, SendMessageCommand } from '@aws-sdk/client-sqs';
+import {
+	DeleteMessageCommand,
+	type Message,
+	ReceiveMessageCommand,
+	SendMessageCommand,
+	type SQSClient
+} from '@aws-sdk/client-sqs';
 import { Logger } from '@nestjs/common';
 import { beforeEach, describe, expect, it, mock, spyOn } from 'bun:test';
 
@@ -39,7 +45,7 @@ describe('SqsConsumerWorker', () => {
 		inboxRepository = new InboxMemoryRepository();
 		mockSqsClient = { send: mock() };
 		mockSqsClientService = {
-			client: mockSqsClient as any,
+			client: mockSqsClient as unknown as SQSClient,
 			onModuleDestroy: () => {}
 		};
 		mockUseCase = { execute: mock() };

@@ -40,7 +40,7 @@ describe('Pending Reference Worker', () => {
 		outboxRepository = new OutboxMemoryRepository();
 
 		entityManager = {
-			transactional: async (cb: (em: any) => Promise<any>) => cb(entityManager)
+			transactional: async <T>(cb: (em: EntityManager) => Promise<T>): Promise<T> => cb(entityManager)
 		} as unknown as EntityManager;
 
 		const idGenerator = new IdGeneratorUuidAdapter();

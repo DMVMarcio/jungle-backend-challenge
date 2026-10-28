@@ -93,7 +93,11 @@ export class SqsConsumerWorker implements OnApplicationBootstrap, OnApplicationS
 			return false;
 		}
 
-		let parsed: any;
+		let parsed: {
+			type?: string;
+			messageId?: string;
+			data?: Record<string, unknown>;
+		} | null = null;
 		try {
 			parsed = JSON.parse(message.Body);
 		} catch {
@@ -102,7 +106,7 @@ export class SqsConsumerWorker implements OnApplicationBootstrap, OnApplicationS
 			return false;
 		}
 
-		if (parsed?.type !== 'WagerTransactionRequested' || !parsed?.data) {
+		if (!parsed || parsed.type !== 'WagerTransactionRequested' || !parsed.data) {
 			this.logger.error(`Invalid message type or missing data in ${message.MessageId}`);
 			await this.sendToDlq(message);
 			return false;

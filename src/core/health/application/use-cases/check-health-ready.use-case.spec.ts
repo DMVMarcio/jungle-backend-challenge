@@ -1,3 +1,4 @@
+import type { SQSClient } from '@aws-sdk/client-sqs';
 import { EntityManager } from '@mikro-orm/postgresql';
 import { beforeEach, describe, expect, it, mock } from 'bun:test';
 
@@ -22,7 +23,7 @@ describe('CheckHealthReady UseCase', () => {
 
 		mockSqsClient = { send: mock() };
 		mockSqsClientService = {
-			client: mockSqsClient as any,
+			client: mockSqsClient as unknown as SQSClient,
 			onModuleDestroy: () => {}
 		};
 

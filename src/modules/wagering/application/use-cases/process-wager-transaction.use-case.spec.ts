@@ -52,7 +52,7 @@ describe('ProcessWagerTransactionUseCase', () => {
 		payloadHasher = new PayloadHasherSha256Adapter();
 
 		entityManager = {
-			transactional: async (cb: (em: any) => Promise<any>) => cb(entityManager)
+			transactional: async <T>(cb: (em: EntityManager) => Promise<T>): Promise<T> => cb(entityManager)
 		} as unknown as EntityManager;
 
 		const outboxService = new WageringOutboxService(outboxRepository, idGenerator);

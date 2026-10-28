@@ -30,7 +30,10 @@ describe('ZodValidationPipe', () => {
 		try {
 			pipe.transform({ name: 'John', age: 'invalid' });
 		} catch (error) {
-			const res = (error as BadRequestException).getResponse() as any;
+			const res = (error as BadRequestException).getResponse() as {
+				code: string;
+				errors: Array<{ field: string }>;
+			};
 			expect(res.code).toBe('VALIDATION_ERROR');
 			expect(res.errors[0].field).toBe('age');
 		}

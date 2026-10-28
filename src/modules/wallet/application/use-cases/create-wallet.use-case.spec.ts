@@ -30,7 +30,7 @@ describe('Create Wallet UseCase', () => {
 		idGenerator = new IdGeneratorUuidAdapter();
 
 		entityManager = {
-			transactional: async (cb: (em: any) => Promise<any>) => cb(entityManager)
+			transactional: async <T>(cb: (em: EntityManager) => Promise<T>): Promise<T> => cb(entityManager)
 		} as unknown as EntityManager;
 
 		sut = new CreateWalletUseCase(

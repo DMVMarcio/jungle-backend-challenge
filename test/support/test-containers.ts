@@ -30,7 +30,7 @@ export async function startPostgresContainer(): Promise<TestPostgresContext> {
 		.start();
 	const connectionUrl = container.getConnectionUri();
 
-	(settings.database as any).url = connectionUrl;
+	settings.database.url = connectionUrl;
 
 	const orm = await MikroORM.init({
 		...config,
@@ -86,9 +86,9 @@ export async function startLocalstackContainer(): Promise<TestLocalstackContext>
 	const wagerQueueUrl = `${endpoint}/000000000000/wager-transactions.fifo`;
 	const dlqQueueUrl = `${endpoint}/000000000000/wager-transactions-dlq.fifo`;
 
-	(settings.sqs as any).endpoint = endpoint;
-	(settings.sqs.queues as any).wagerTransactions = wagerQueueUrl;
-	(settings.sqs.queues as any).wagerTransactionsDlq = dlqQueueUrl;
+	settings.sqs.endpoint = endpoint;
+	settings.sqs.queues.wagerTransactions = wagerQueueUrl;
+	settings.sqs.queues.wagerTransactionsDlq = dlqQueueUrl;
 
 	return {
 		container,

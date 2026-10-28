@@ -161,9 +161,10 @@ export class ProcessWagerTransactionUseCase {
 		} catch (error) {
 			this.entityManager.clear?.();
 
+			const databaseException = error as { code?: string; name?: string } | null | undefined;
 			const isUniqueViolation =
-				(error as any)?.code === '23505' ||
-				(error as any)?.name === 'UniqueConstraintViolationException';
+				databaseException?.code === '23505' ||
+				databaseException?.name === 'UniqueConstraintViolationException';
 
 			if (isUniqueViolation) {
 				const concurrentTransaction = await this.wageringRepository.findByIdempotencyKey(input.idempotencyKey);
