@@ -18,6 +18,7 @@ export interface TestLocalstackContext {
 	endpoint: string;
 	wagerQueueUrl: string;
 	dlqQueueUrl: string;
+	wagerEventsQueueUrl: string;
 
 	stop: () => Promise<void>;
 }
@@ -83,18 +84,31 @@ export async function startLocalstackContainer(): Promise<TestLocalstackContext>
 		})
 	);
 
+	await sqsClient.send(
+		new CreateQueueCommand({
+			QueueName: 'wager-events.fifo',
+			Attributes: {
+				FifoQueue: 'true',
+				ContentBasedDeduplication: 'true'
+			}
+		})
+	);
+
 	const wagerQueueUrl = `${endpoint}/000000000000/wager-transactions.fifo`;
 	const dlqQueueUrl = `${endpoint}/000000000000/wager-transactions-dlq.fifo`;
+	const wagerEventsQueueUrl = `${endpoint}/000000000000/wager-events.fifo`;
 
 	settings.sqs.endpoint = endpoint;
 	settings.sqs.queues.wagerTransactions = wagerQueueUrl;
 	settings.sqs.queues.wagerTransactionsDlq = dlqQueueUrl;
+	settings.sqs.queues.wagerEvents = wagerEventsQueueUrl;
 
 	return {
 		container,
 		endpoint,
 		wagerQueueUrl,
 		dlqQueueUrl,
+		wagerEventsQueueUrl,
 
 		stop: async () => {
 			sqsClient.destroy();

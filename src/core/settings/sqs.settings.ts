@@ -8,7 +8,8 @@ export const sqsSchema = z.object({
 
 	queues: z.object({
 		wagerTransactions: z.url(),
-		wagerTransactionsDlq: z.url()
+		wagerTransactionsDlq: z.url(),
+		wagerEvents: z.url().optional()
 	})
 });
 

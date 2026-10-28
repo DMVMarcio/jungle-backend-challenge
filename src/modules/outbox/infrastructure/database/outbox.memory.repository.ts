@@ -23,4 +23,10 @@ export class OutboxMemoryRepository implements IOutboxRepository {
 		const index = this.items.findIndex(item => item.id === message.id);
 		if (index >= 0) this.items[index] = message;
 	}
+
+	async updateMany(messages: OutboxMessage[]): Promise<void> {
+		for (const message of messages) {
+			await this.update(message);
+		}
+	}
 }

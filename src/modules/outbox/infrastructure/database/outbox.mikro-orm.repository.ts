@@ -47,4 +47,21 @@ export class OutboxMikroOrmRepository implements IOutboxRepository {
 
 		await this.entityManager.flush();
 	}
+
+	async updateMany(messages: OutboxMessage[]): Promise<void> {
+		if (messages.length === 0) return;
+
+		const ids = messages.map(m => m.id);
+		const records = await this.entityManager.find(OutboxMessageSchema, { id: { $in: ids } });
+		const recordMap = new Map(records.map(r => [r.id, r]));
+
+		for (const message of messages) {
+			const record = recordMap.get(message.id);
+			if (record) {
+				this.entityManager.assign(record, OutboxMessageMapper.toPersistence(message));
+			}
+		}
+
+		await this.entityManager.flush();
+	}
 }

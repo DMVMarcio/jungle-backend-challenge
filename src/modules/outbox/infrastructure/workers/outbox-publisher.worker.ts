@@ -69,12 +69,15 @@ export class OutboxPublisherWorker implements OnApplicationBootstrap, OnApplicat
 				const pendingMessages = await this.outboxRepository.findPendingDue(batchSize);
 				if (pendingMessages.length === 0) return 0;
 
+				const targetQueueUrl = settings.sqs.queues.wagerEvents ?? settings.sqs.queues.wagerTransactions;
+				let publishedCount = 0;
+
 				await Promise.all(
 					pendingMessages.map(async message => {
 						try {
 							await this.sqsClientService.client.send(
 								new SendMessageCommand({
-									QueueUrl: settings.sqs.queues.wagerTransactions,
+									QueueUrl: targetQueueUrl,
 									MessageBody: JSON.stringify({
 										id: message.id,
 										aggregateId: message.aggregateId,
@@ -88,6 +91,7 @@ export class OutboxPublisherWorker implements OnApplicationBootstrap, OnApplicat
 							);
 
 							message.markPublished();
+							publishedCount++;
 							this.logger.log(`Outbox message published`, {
 								messageId: message.id,
 								transactionId: message.aggregateId
@@ -104,12 +108,12 @@ export class OutboxPublisherWorker implements OnApplicationBootstrap, OnApplicat
 							this.metricsService.recordRetry('outbox');
 							message.scheduleRetry();
 						}
-
-						await this.outboxRepository.update(message);
 					})
 				);
 
-				return pendingMessages.filter(message => !message.isPending()).length;
+				await this.outboxRepository.updateMany(pendingMessages);
+
+				return publishedCount;
 			});
 		} finally {
 			this.isProcessing = false;

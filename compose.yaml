@@ -48,6 +48,7 @@ services:
               echo 'Creating SQS FIFO queues...'
               aws --endpoint-url=http://localstack:4566 sqs create-queue --queue-name wager-transactions-dlq.fifo --attributes FifoQueue=true,ContentBasedDeduplication=true
               aws --endpoint-url=http://localstack:4566 sqs create-queue --queue-name wager-transactions.fifo --attributes FifoQueue=true,ContentBasedDeduplication=true
+              aws --endpoint-url=http://localstack:4566 sqs create-queue --queue-name wager-events.fifo --attributes FifoQueue=true,ContentBasedDeduplication=true
               echo 'Successfully created SQS FIFO queues!'
             "
 

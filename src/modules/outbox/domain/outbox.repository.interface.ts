@@ -5,4 +5,5 @@ export interface IOutboxRepository {
 	countPending(): Promise<number>;
 	create(message: OutboxMessage): Promise<void>;
 	update(message: OutboxMessage): Promise<void>;
+	updateMany(messages: OutboxMessage[]): Promise<void>;
 }

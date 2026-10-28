@@ -80,9 +80,10 @@ describe('Outbox SQS Integration', () => {
 
 		expect(publishedCount).toBeGreaterThanOrEqual(1);
 
+		const targetQueueUrl = settings.sqs.queues.wagerEvents ?? settings.sqs.queues.wagerTransactions;
 		const sqsResponse = await sqsClientService.client.send(
 			new ReceiveMessageCommand({
-				QueueUrl: settings.sqs.queues.wagerTransactions,
+				QueueUrl: targetQueueUrl,
 				MaxNumberOfMessages: 10,
 				WaitTimeSeconds: 5
 			})
@@ -117,7 +118,7 @@ describe('Outbox SQS Integration', () => {
 			if (msg.ReceiptHandle) {
 				await sqsClientService.client.send(
 					new DeleteMessageCommand({
-						QueueUrl: settings.sqs.queues.wagerTransactions,
+						QueueUrl: targetQueueUrl,
 						ReceiptHandle: msg.ReceiptHandle
 					})
 				);
