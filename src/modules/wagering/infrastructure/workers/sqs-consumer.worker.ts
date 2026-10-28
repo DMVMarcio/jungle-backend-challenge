@@ -1,4 +1,10 @@
-import { DeleteMessageCommand, type Message, ReceiveMessageCommand, SendMessageCommand } from '@aws-sdk/client-sqs';
+import {
+	ChangeMessageVisibilityCommand,
+	DeleteMessageCommand,
+	type Message,
+	ReceiveMessageCommand,
+	SendMessageCommand
+} from '@aws-sdk/client-sqs';
 import { Inject, Injectable, Logger, OnApplicationBootstrap, OnApplicationShutdown } from '@nestjs/common';
 
 import { MetricsService } from '@/core/observability/services/metrics.service';
@@ -7,6 +13,9 @@ import { settings } from '@/core/settings';
 import { SqsClientService } from '@/core/sqs/sqs-client.service';
 import type { IInboxRepository } from '@/modules/inbox/domain/inbox.repository.interface';
 import { INBOX_TOKENS } from '@/modules/inbox/inbox.tokens';
+import { IdempotencyConflictError } from '@/modules/wagering/domain/wagering.errors';
+import { WalletNotFoundError, WalletOwnershipError } from '@/modules/wallet/domain/wallet.errors';
+import { CurrencyMismatchError } from '@/shared/domain/money/money.errors';
 
 import { ProcessWagerTransactionUseCase } from '../../application/use-cases/process-wager-transaction.use-case';
 import { createWagerTransactionSchema } from '../../presentation/http/dto/create-wager-transaction.dto';
@@ -17,6 +26,7 @@ export class SqsConsumerWorker implements OnApplicationBootstrap, OnApplicationS
 	private readonly consumerName = 'WagerTransactionConsumer';
 	private isRunning = false;
 	private isProcessing = false;
+	private activeLoopPromise?: Promise<void>;
 
 	constructor(
 		@Inject(INBOX_TOKENS.REPOSITORY)
@@ -33,18 +43,22 @@ export class SqsConsumerWorker implements OnApplicationBootstrap, OnApplicationS
 		this.start();
 	}
 
-	onApplicationShutdown(): void {
-		this.stop();
+	async onApplicationShutdown(): Promise<void> {
+		await this.stop();
 	}
 
 	start(): void {
 		if (this.isRunning) return;
 		this.isRunning = true;
-		void this.runLoop();
+		this.activeLoopPromise = this.runLoop();
 	}
 
-	stop(): void {
+	async stop(): Promise<void> {
 		this.isRunning = false;
+		if (this.activeLoopPromise) {
+			await this.activeLoopPromise;
+			this.activeLoopPromise = undefined;
+		}
 	}
 
 	async pollMessagesOnce(): Promise<number> {
@@ -65,8 +79,27 @@ export class SqsConsumerWorker implements OnApplicationBootstrap, OnApplicationS
 			if (messages.length === 0) return 0;
 
 			let processedCount = 0;
-			for (const message of messages) {
-				if (!this.isRunning && settings.nodeEnv !== 'test') break;
+			for (let i = 0; i < messages.length; i++) {
+				const message = messages[i];
+				if (!this.isRunning && settings.nodeEnv !== 'test') {
+					const remaining = messages.slice(i);
+					await Promise.all(
+						remaining.map(m =>
+							m.ReceiptHandle
+								? this.sqsClientService.client
+										.send(
+											new ChangeMessageVisibilityCommand({
+												QueueUrl: settings.sqs.queues.wagerTransactions,
+												ReceiptHandle: m.ReceiptHandle,
+												VisibilityTimeout: 0
+											})
+										)
+										.catch(() => undefined)
+								: Promise.resolve()
+						)
+					);
+					break;
+				}
 
 				try {
 					const processed = await this.processMessage(message);
@@ -98,6 +131,7 @@ export class SqsConsumerWorker implements OnApplicationBootstrap, OnApplicationS
 
 		let parsed: {
 			type?: string;
+			eventType?: string;
 			messageId?: string;
 			data?: Record<string, unknown>;
 		} | null = null;
@@ -107,6 +141,22 @@ export class SqsConsumerWorker implements OnApplicationBootstrap, OnApplicationS
 			this.logger.error(`Malformed JSON in message ${message.MessageId}`);
 			await this.sendToDlq(message);
 			return false;
+		}
+
+		if (parsed) {
+			const isIntegrationEvent =
+				parsed.eventType === 'WagerTransactionProcessed' ||
+				parsed.eventType === 'WagerTransactionRejected' ||
+				parsed.eventType === 'WalletBalanceChanged' ||
+				parsed.eventType === 'WagerTransactionPendingReference';
+
+			if (isIntegrationEvent) {
+				this.logger.debug(`Acknowledging integration event ${parsed.eventType} from command queue`, {
+					messageId: message.MessageId
+				});
+				await this.deleteFromQueue(message.ReceiptHandle);
+				return true;
+			}
 		}
 
 		if (!parsed || parsed.type !== 'WagerTransactionRequested' || !parsed.data) {
@@ -136,6 +186,8 @@ export class SqsConsumerWorker implements OnApplicationBootstrap, OnApplicationS
 				? parsed.data.idempotencyKey
 				: `${validation.data.providerId}:${validation.data.externalTransactionId}`;
 
+		const startTime = performance.now();
+
 		return this.requestContextService.runWithContext(
 			{
 				correlationId: messageId,
@@ -155,13 +207,34 @@ export class SqsConsumerWorker implements OnApplicationBootstrap, OnApplicationS
 					});
 
 					await this.deleteFromQueue(message.ReceiptHandle!);
+					const durationMs = performance.now() - startTime;
+					this.metricsService.recordProcessingLatency(durationMs);
+
 					this.logger.log(`SQS message processed successfully`, {
 						messageId,
 						walletId: validation.data.walletId,
-						providerId: validation.data.providerId
+						providerId: validation.data.providerId,
+						durationMs
 					});
 					return true;
 				} catch (error) {
+					const durationMs = performance.now() - startTime;
+					this.metricsService.recordProcessingLatency(durationMs);
+
+					const isDeterministicDomainError =
+						error instanceof WalletNotFoundError ||
+						error instanceof WalletOwnershipError ||
+						error instanceof CurrencyMismatchError ||
+						error instanceof IdempotencyConflictError;
+
+					if (isDeterministicDomainError) {
+						this.logger.warn(
+							`Deterministic domain error on message ${messageId}: ${(error as Error).message}. Moving to DLQ without retrying.`
+						);
+						await this.sendToDlq(message);
+						return false;
+					}
+
 					this.logger.error(
 						`Error processing message ${messageId}: ${(error as Error).message}`,
 						(error as Error).stack,

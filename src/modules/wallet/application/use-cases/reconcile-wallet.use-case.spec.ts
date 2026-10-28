@@ -107,7 +107,7 @@ describe('ReconcileWalletUseCase', () => {
 		expect(result.calculatedBalance).toEqual({ amount: '50.00', currency: 'BRL' });
 		expect(result.difference).toEqual({ amount: '50.00', currency: 'BRL' });
 		expect(result.checkedEntries).toBe(1);
-		expect(warnSpy).toHaveBeenCalledTimes(1);
+		expect(warnSpy).toHaveBeenCalledWith('Wallet reconciliation discrepancy detected', expect.objectContaining({ walletId: 'wallet-1' }));
 
 		warnSpy.mockRestore();
 	});

@@ -19,6 +19,8 @@ const bootstrap = async () => {
 	app.useGlobalFilters(new DomainExceptionFilter());
 	app.useGlobalInterceptors(app.get(CorrelationIdInterceptor));
 
+	app.enableShutdownHooks();
+
 	await app.listen({ port: settings.server.port, host: settings.server.host });
 
 	const logger = new Logger('Bootstrap');

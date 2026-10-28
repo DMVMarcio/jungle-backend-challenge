@@ -1,4 +1,5 @@
 import {
+	ChangeMessageVisibilityCommand,
 	DeleteMessageCommand,
 	type Message,
 	ReceiveMessageCommand,
@@ -11,9 +12,9 @@ import { beforeEach, describe, expect, it, mock, spyOn } from 'bun:test';
 import { MetricsService } from '@/core/observability/services/metrics.service';
 import { RequestContextService } from '@/core/observability/services/request-context.service';
 import type { SqsClientService } from '@/core/sqs/sqs-client.service';
-
 import { InboxMessage } from '@/modules/inbox/domain/inbox-message';
 import { InboxMemoryRepository } from '@/modules/inbox/infrastructure/database/inbox.memory.repository';
+import { WalletNotFoundError } from '@/modules/wallet/domain/wallet.errors';
 
 import type { ProcessWagerTransactionUseCase } from '../../application/use-cases/process-wager-transaction.use-case';
 import { SqsConsumerWorker } from './sqs-consumer.worker';
@@ -22,6 +23,7 @@ describe('SqsConsumerWorker', () => {
 	let sut: SqsConsumerWorker;
 
 	let inboxRepository: InboxMemoryRepository;
+	let metricsService: MetricsService;
 	let mockSqsClient: { send: ReturnType<typeof mock> };
 	let mockSqsClientService: SqsClientService;
 	let mockUseCase: { execute: ReturnType<typeof mock> };
@@ -45,7 +47,7 @@ describe('SqsConsumerWorker', () => {
 
 	beforeEach(() => {
 		inboxRepository = new InboxMemoryRepository();
-		const metricsService = new MetricsService();
+		metricsService = new MetricsService();
 		const requestContextService = new RequestContextService();
 
 		mockSqsClient = { send: mock() };
@@ -97,6 +99,54 @@ describe('SqsConsumerWorker', () => {
 		expect(mockSqsClient.send).toHaveBeenCalledTimes(1);
 		const command = mockSqsClient.send.mock.calls[0][0];
 		expect(command).toBeInstanceOf(DeleteMessageCommand);
+	});
+
+	it('should acknowledge and delete integration event without sending to DLQ', async () => {
+		mockSqsClient.send.mockResolvedValue({});
+
+		const sqsMessage: Message = {
+			MessageId: 'sqs-event-msg-1',
+			ReceiptHandle: 'receipt-event-1',
+			Body: JSON.stringify({
+				eventId: 'evt-1',
+				eventType: 'WagerTransactionProcessed',
+				aggregateId: 'tx-1',
+				occurredAt: '2026-10-28T12:00:00.000Z',
+				data: {}
+			}),
+			Attributes: {
+				ApproximateReceiveCount: '1'
+			}
+		};
+
+		const result = await sut.processMessage(sqsMessage);
+
+		expect(result).toBe(true);
+		expect(mockUseCase.execute).not.toHaveBeenCalled();
+		expect(mockSqsClient.send).toHaveBeenCalledTimes(1);
+		expect(mockSqsClient.send.mock.calls[0][0]).toBeInstanceOf(DeleteMessageCommand);
+	});
+
+	it('should route directly to DLQ without retrying when use case throws deterministic domain error', async () => {
+		spyOn(Logger.prototype, 'warn').mockImplementation(() => {});
+		mockUseCase.execute.mockRejectedValue(new WalletNotFoundError('0192f291-27dd-7d3f-8071-5f8685deef37'));
+		mockSqsClient.send.mockResolvedValue({});
+
+		const sqsMessage: Message = {
+			MessageId: 'sqs-msg-wallet-not-found',
+			ReceiptHandle: 'receipt-wallet-not-found',
+			Body: JSON.stringify(validPayload),
+			Attributes: {
+				ApproximateReceiveCount: '1'
+			}
+		};
+
+		const result = await sut.processMessage(sqsMessage);
+
+		expect(result).toBe(false);
+		expect(mockSqsClient.send).toHaveBeenCalledTimes(2);
+		expect(mockSqsClient.send.mock.calls[0][0]).toBeInstanceOf(SendMessageCommand);
+		expect(mockSqsClient.send.mock.calls[1][0]).toBeInstanceOf(DeleteMessageCommand);
 	});
 
 	it('should acknowledge and delete from queue without re-executing if message already processed in inbox', async () => {
