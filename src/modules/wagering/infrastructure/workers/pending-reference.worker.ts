@@ -3,7 +3,6 @@ import { Inject, Injectable, Logger, type OnApplicationBootstrap, type OnApplica
 
 import { MetricsService } from '@/core/observability/services/metrics.service';
 import { settings } from '@/core/settings';
-
 import type { IWalletLedgerEntryRepository } from '@/modules/wallet/domain/wallet-ledger-entry.repository.interface';
 import type { IWalletRepository } from '@/modules/wallet/domain/wallet.repository.interface';
 import { WALLET_TOKENS } from '@/modules/wallet/wallet.tokens';
@@ -124,6 +123,7 @@ export class PendingReferenceWorker implements OnApplicationBootstrap, OnApplica
 			if (!wallet) {
 				currentTransaction.reject('REFERENCE_NOT_FOUND');
 				await this.wageringRepository.update(currentTransaction);
+				await this.outboxService.enqueue(currentTransaction);
 				this.metricsService.recordTransaction(currentTransaction.status);
 				return true;
 			}
@@ -140,7 +140,7 @@ export class PendingReferenceWorker implements OnApplicationBootstrap, OnApplica
 				if (!reference) {
 					currentTransaction.reject('REFERENCE_NOT_FOUND');
 					await this.wageringRepository.update(currentTransaction);
-					await this.outboxService.enqueue(currentTransaction, wallet.id, wallet.balance);
+					await this.outboxService.enqueue(currentTransaction, wallet);
 					this.metricsService.recordTransaction(currentTransaction.status);
 					return true;
 				}
@@ -162,7 +162,7 @@ export class PendingReferenceWorker implements OnApplicationBootstrap, OnApplica
 			}
 
 			await this.wageringRepository.update(currentTransaction);
-			await this.outboxService.enqueue(currentTransaction, wallet.id, wallet.balance);
+			await this.outboxService.enqueue(currentTransaction, wallet, ledgerEntry);
 			this.metricsService.recordTransaction(currentTransaction.status);
 
 			this.logger.log(`Pending reference resolved for transaction ${currentTransaction.id}`, {

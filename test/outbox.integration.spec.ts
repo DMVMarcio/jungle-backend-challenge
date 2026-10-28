@@ -7,7 +7,6 @@ import { afterAll, beforeAll, describe, expect, it } from 'bun:test';
 
 import { settings } from '@/core/settings';
 import { SqsClientService } from '@/core/sqs/sqs-client.service';
-
 import { OutboxPublisherWorker } from '@/modules/outbox/infrastructure/workers/outbox-publisher.worker';
 import { ProcessWagerTransactionUseCase } from '@/modules/wagering/application/use-cases/process-wager-transaction.use-case';
 import { WagerTransactionKind, WagerTransactionStatus } from '@/modules/wagering/domain/wager-transaction';
@@ -92,20 +91,27 @@ describe('Outbox SQS Integration', () => {
 		const messages = sqsResponse.Messages ?? [];
 		expect(messages.length).toBeGreaterThan(0);
 
-		const matchedMessage = messages.find(msg => {
+		const transactionProcessedMessage = messages.find(msg => {
 			if (!msg.Body) return false;
 			try {
 				const body = JSON.parse(msg.Body);
-				return body.aggregateId === wallet.id;
+				return body.eventType === 'WagerTransactionProcessed' && body.aggregateId === wagerResult.transactionId;
 			} catch {
 				return false;
 			}
 		});
+		expect(transactionProcessedMessage).toBeDefined();
 
-		expect(matchedMessage).toBeDefined();
-		const parsedBody = JSON.parse(matchedMessage!.Body!);
-		expect(parsedBody.eventType).toBe('WagerTransactionProcessed');
-		expect(parsedBody.aggregateId).toBe(wallet.id);
+		const balanceChangedMessage = messages.find(msg => {
+			if (!msg.Body) return false;
+			try {
+				const body = JSON.parse(msg.Body);
+				return body.eventType === 'WalletBalanceChanged' && body.aggregateId === wallet.id;
+			} catch {
+				return false;
+			}
+		});
+		expect(balanceChangedMessage).toBeDefined();
 
 		for (const msg of messages) {
 			if (msg.ReceiptHandle) {

@@ -118,8 +118,9 @@ describe('Pending Reference Worker', () => {
 		expect(ledgerEntries).toHaveLength(1);
 		expect(ledgerEntries[0].direction).toBe(LedgerDirection.Credit);
 
-		expect(outboxRepository.items).toHaveLength(1);
-		expect(outboxRepository.items[0].eventType).toBe('WagerTransactionProcessed');
+		expect(outboxRepository.items).toHaveLength(2);
+		expect(outboxRepository.items.map(i => i.eventType)).toContain('WagerTransactionProcessed');
+		expect(outboxRepository.items.map(i => i.eventType)).toContain('WalletBalanceChanged');
 	});
 
 	it('should keep transaction as PENDING_REFERENCE when reference is still missing and TTL has not expired', async () => {

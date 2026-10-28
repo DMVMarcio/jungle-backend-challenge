@@ -1,5 +1,6 @@
 import { Module, forwardRef } from '@nestjs/common';
 
+import { OutboxModule } from '../outbox/outbox.module';
 import { WageringModule } from '../wagering/wagering.module';
 import { CreateWalletUseCase } from './application/use-cases/create-wallet.use-case';
 import { GetWalletLedgerUseCase } from './application/use-cases/get-wallet-ledger.use-case';
@@ -11,7 +12,7 @@ import { WalletController } from './presentation/http/wallet.controller';
 import { WALLET_TOKENS } from './wallet.tokens';
 
 @Module({
-	imports: [forwardRef(() => WageringModule)],
+	imports: [forwardRef(() => WageringModule), OutboxModule],
 	controllers: [WalletController],
 	providers: [
 		{

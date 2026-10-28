@@ -1,9 +1,15 @@
-export interface IntegrationEvent<T = Record<string, unknown>> {
+import { IntegrationEvent } from '@/shared/domain/events/integration-event';
+
+export interface RawOutboxEventInput {
 	id?: string;
 	aggregateId: string;
 	eventType: string;
-	payload: T;
+	payload: Record<string, unknown>;
 	occurredAt?: Date;
+}
+
+function isRawOutboxEvent(event: IntegrationEvent<unknown> | RawOutboxEventInput): event is RawOutboxEventInput {
+	return 'payload' in event;
 }
 
 export interface OutboxMessageState {
@@ -30,13 +36,25 @@ export class OutboxMessage {
 		private _publishedAt?: Date
 	) {}
 
-	static enqueue(event: IntegrationEvent<Record<string, unknown>>): OutboxMessage {
+	static enqueue(event: IntegrationEvent<unknown> | RawOutboxEventInput): OutboxMessage {
+		if (isRawOutboxEvent(event)) {
+			return new OutboxMessage(
+				event.id ?? crypto.randomUUID(),
+				event.aggregateId,
+				event.eventType,
+				Object.freeze({ ...event.payload }),
+				event.occurredAt ?? new Date(),
+				0
+			);
+		}
+
+		const json = event.toJSON();
 		return new OutboxMessage(
-			event.id ?? crypto.randomUUID(),
+			event.eventId,
 			event.aggregateId,
 			event.eventType,
-			Object.freeze({ ...event.payload }),
-			event.occurredAt ?? new Date(),
+			Object.freeze(json as Record<string, unknown>),
+			event.occurredAt,
 			0
 		);
 	}

@@ -1,9 +1,10 @@
 import { EntityManager } from '@mikro-orm/postgresql';
 import { beforeEach, describe, expect, it } from 'bun:test';
 
+import { RequestContextService } from '@/core/observability/services/request-context.service';
+import { OutboxMemoryRepository } from '@/modules/outbox/infrastructure/database/outbox.memory.repository';
 import { WagerTransactionKind, WagerTransactionStatus } from '@/modules/wagering/domain/wager-transaction';
 import { WagerTransactionMemoryRepository } from '@/modules/wagering/infrastructure/database/wager-transaction.memory.repository';
-
 import { IdGeneratorUuidAdapter } from '@/shared/adapters/id-generator/id-generator.uuid.adapter';
 
 import { LedgerDirection } from '../../domain/wallet-ledger-entry';
@@ -18,16 +19,20 @@ describe('Create Wallet UseCase', () => {
 	let walletRepository: WalletMemoryRepository;
 	let ledgerRepository: WalletLedgerEntryMemoryRepository;
 	let wageringRepository: WagerTransactionMemoryRepository;
+	let outboxRepository: OutboxMemoryRepository;
 
 	let idGenerator: IdGeneratorUuidAdapter;
+	let requestContextService: RequestContextService;
 	let entityManager: EntityManager;
 
 	beforeEach(() => {
 		walletRepository = new WalletMemoryRepository();
 		ledgerRepository = new WalletLedgerEntryMemoryRepository();
 		wageringRepository = new WagerTransactionMemoryRepository();
+		outboxRepository = new OutboxMemoryRepository();
 
 		idGenerator = new IdGeneratorUuidAdapter();
+		requestContextService = new RequestContextService();
 
 		entityManager = {
 			transactional: async <T>(cb: (em: EntityManager) => Promise<T>): Promise<T> => cb(entityManager)
@@ -37,7 +42,9 @@ describe('Create Wallet UseCase', () => {
 			walletRepository,
 			ledgerRepository,
 			wageringRepository,
+			outboxRepository,
 			idGenerator,
+			requestContextService,
 			entityManager
 		);
 	});
@@ -57,9 +64,10 @@ describe('Create Wallet UseCase', () => {
 		expect(savedWallet).not.toBeNull();
 		expect(ledgerRepository.items).toHaveLength(0);
 		expect(wageringRepository.items).toHaveLength(0);
+		expect(outboxRepository.items).toHaveLength(0);
 	});
 
-	it('should create a wallet with positive balance, creating a CREDIT ledger entry and an OPENING transaction', async () => {
+	it('should create a wallet with positive balance, creating a CREDIT ledger entry, OPENING transaction and outbox event', async () => {
 		const output = await sut.execute({
 			playerId: 'player-1',
 			initialBalance: { amount: '100.00', currency: 'BRL' }
@@ -84,6 +92,9 @@ describe('Create Wallet UseCase', () => {
 		expect(openingTransaction.status).toBe(WagerTransactionStatus.Processed);
 		expect(openingTransaction.money.toJSON()).toEqual({ amount: '100.00', currency: 'BRL' });
 		expect(openingTransaction.idempotencyKey).toBe(`opening:${output.id}`);
+
+		expect(outboxRepository.items).toHaveLength(1);
+		expect(outboxRepository.items[0].eventType).toBe('WalletBalanceChanged');
 	});
 
 	it('should throw WalletAlreadyExistsError when wallet already exists for player and currency', async () => {

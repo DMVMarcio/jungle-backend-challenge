@@ -1,16 +1,20 @@
 import { EntityManager } from '@mikro-orm/postgresql';
 import { Inject, Injectable } from '@nestjs/common';
 
+import { RequestContextService } from '@/core/observability/services/request-context.service';
+import { OutboxMessage } from '@/modules/outbox/domain/outbox-message';
+import type { IOutboxRepository } from '@/modules/outbox/domain/outbox.repository.interface';
+import { OUTBOX_TOKENS } from '@/modules/outbox/outbox.tokens';
 import { WagerTransaction, WagerTransactionKind } from '@/modules/wagering/domain/wager-transaction';
 import type { IWagerTransactionRepository } from '@/modules/wagering/domain/wager-transaction.repository.interface';
 import { WAGERING_TOKENS } from '@/modules/wagering/wagering.tokens';
+import { WalletBalanceChanged } from '@/modules/wallet/domain/events/wallet-balance-changed.event';
 import { Wallet } from '@/modules/wallet/domain/wallet';
 import { LedgerDirection, WalletLedgerEntry } from '@/modules/wallet/domain/wallet-ledger-entry';
 import type { IWalletLedgerEntryRepository } from '@/modules/wallet/domain/wallet-ledger-entry.repository.interface';
 import { WalletAlreadyExistsError } from '@/modules/wallet/domain/wallet.errors';
 import type { IWalletRepository } from '@/modules/wallet/domain/wallet.repository.interface';
 import { WALLET_TOKENS } from '@/modules/wallet/wallet.tokens';
-
 import { Money } from '@/shared/domain/money/money';
 import type { IIdGenerator } from '@/shared/ports/id-generator.port';
 import { SHARED_TOKENS } from '@/shared/shared.tokens';
@@ -42,10 +46,13 @@ export class CreateWalletUseCase {
 		private readonly ledgerRepository: IWalletLedgerEntryRepository,
 		@Inject(WAGERING_TOKENS.REPOSITORY)
 		private readonly wageringRepository: IWagerTransactionRepository,
+		@Inject(OUTBOX_TOKENS.REPOSITORY)
+		private readonly outboxRepository: IOutboxRepository,
 
 		@Inject(SHARED_TOKENS.ID_GENERATOR)
 		private readonly idGenerator: IIdGenerator,
 
+		private readonly requestContextService: RequestContextService,
 		private readonly entityManager: EntityManager
 	) {}
 
@@ -97,10 +104,17 @@ export class CreateWalletUseCase {
 
 				openingTransaction.markProcessed(undefined, wallet.createdAt);
 
+				const balanceChangedEvent = WalletBalanceChanged.from(wallet, ledgerEntry, {
+					eventId: this.idGenerator.generate(),
+					correlationId: this.requestContextService.getCorrelationId() ?? openingTransactionId,
+					causationId: openingTransactionId
+				});
+
 				await this.entityManager.transactional(async () => {
 					await this.walletRepository.create(wallet);
 					await this.ledgerRepository.create(ledgerEntry);
 					await this.wageringRepository.create(openingTransaction);
+					await this.outboxRepository.create(OutboxMessage.enqueue(balanceChangedEvent));
 				});
 			} else {
 				await this.walletRepository.create(wallet);

@@ -20,7 +20,6 @@ import type { IWalletLedgerEntryRepository } from '@/modules/wallet/domain/walle
 import { WalletNotFoundError, WalletOwnershipError } from '@/modules/wallet/domain/wallet.errors';
 import type { IWalletRepository } from '@/modules/wallet/domain/wallet.repository.interface';
 import { WALLET_TOKENS } from '@/modules/wallet/wallet.tokens';
-
 import { Money } from '@/shared/domain/money/money';
 import { CurrencyMismatchError } from '@/shared/domain/money/money.errors';
 import type { IIdGenerator } from '@/shared/ports/id-generator.port';
@@ -117,7 +116,7 @@ export class ProcessWagerTransactionUseCase {
 		const existingTransaction = await this.wageringRepository.findByIdempotencyKey(input.idempotencyKey);
 		if (existingTransaction) {
 			this.metricsService.recordDuplicate('idempotency');
-			return this.handleIdempotentReplay(existingTransaction, payloadHash, money);
+			return this.handleIdempotentReplay(existingTransaction, payloadHash, money, input.inboxMessage);
 		}
 
 		const existingByExternal = await this.assertNoDuplicateExternalTransaction(
@@ -127,7 +126,7 @@ export class ProcessWagerTransactionUseCase {
 		);
 		if (existingByExternal) {
 			this.metricsService.recordDuplicate('idempotency');
-			return this.handleIdempotentReplay(existingByExternal, payloadHash, money);
+			return this.handleIdempotentReplay(existingByExternal, payloadHash, money, input.inboxMessage);
 		}
 
 		try {
@@ -135,7 +134,7 @@ export class ProcessWagerTransactionUseCase {
 				const existingInside = await this.wageringRepository.findByIdempotencyKey(input.idempotencyKey);
 				if (existingInside) {
 					this.metricsService.recordDuplicate('idempotency');
-					return this.handleIdempotentReplay(existingInside, payloadHash, money);
+					return this.handleIdempotentReplay(existingInside, payloadHash, money, input.inboxMessage);
 				}
 
 				const wallet = await this.loadAndValidateWallet(input.walletId, input.playerId, money.currency);
@@ -149,7 +148,7 @@ export class ProcessWagerTransactionUseCase {
 				}
 
 				await this.wageringRepository.create(transaction);
-				await this.outboxService.enqueue(transaction, wallet.id, wallet.balance);
+				await this.outboxService.enqueue(transaction, wallet, ledgerEntry);
 
 				if (input.inboxMessage && this.inboxRepository) {
 					const inbox = InboxMessage.receive({
@@ -192,7 +191,7 @@ export class ProcessWagerTransactionUseCase {
 				const concurrentTransaction = await this.wageringRepository.findByIdempotencyKey(input.idempotencyKey);
 				if (concurrentTransaction) {
 					this.metricsService.recordDuplicate('idempotency');
-					return this.handleIdempotentReplay(concurrentTransaction, payloadHash, money);
+					return this.handleIdempotentReplay(concurrentTransaction, payloadHash, money, input.inboxMessage);
 				}
 
 				const concurrentByExternal = await this.wageringRepository.findByProviderAndExternalId(
@@ -204,7 +203,7 @@ export class ProcessWagerTransactionUseCase {
 					if (concurrentByExternal.idempotencyKey !== input.idempotencyKey) {
 						throw new IdempotencyConflictError(input.idempotencyKey);
 					}
-					return this.handleIdempotentReplay(concurrentByExternal, payloadHash, money);
+					return this.handleIdempotentReplay(concurrentByExternal, payloadHash, money, input.inboxMessage);
 				}
 			}
 
@@ -232,10 +231,27 @@ export class ProcessWagerTransactionUseCase {
 	private async handleIdempotentReplay(
 		existingTransaction: WagerTransaction,
 		payloadHash: string,
-		fallbackMoney: Money
+		fallbackMoney: Money,
+		inboxMessage?: { messageId: string; consumerName: string }
 	): Promise<ProcessWagerTransactionOutput> {
 		if (!existingTransaction.matchesPayload(payloadHash)) {
 			throw new IdempotencyConflictError(existingTransaction.idempotencyKey);
+		}
+
+		if (inboxMessage && this.inboxRepository) {
+			const existingInbox = await this.inboxRepository.findByMessageIdAndConsumer(
+				inboxMessage.messageId,
+				inboxMessage.consumerName
+			);
+			if (!existingInbox) {
+				const inbox = InboxMessage.receive({
+					messageId: inboxMessage.messageId,
+					consumerName: inboxMessage.consumerName,
+					payloadHash
+				});
+				inbox.markProcessed();
+				await this.inboxRepository.create(inbox);
+			}
 		}
 
 		let replayBalance: { amount: string; currency: string };

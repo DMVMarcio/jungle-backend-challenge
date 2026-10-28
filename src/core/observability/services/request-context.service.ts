@@ -4,6 +4,7 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 export interface RequestContextStore {
 	correlationId: string;
 	messageId?: string;
+	causationId?: string;
 	transactionId?: string;
 	walletId?: string;
 	providerId?: string;
@@ -23,6 +24,10 @@ export class RequestContextService {
 
 	getCorrelationId(): string | undefined {
 		return this.storage.getStore()?.correlationId;
+	}
+
+	getCausationId(): string | undefined {
+		return this.storage.getStore()?.causationId ?? this.storage.getStore()?.messageId;
 	}
 
 	set(key: keyof RequestContextStore, value: string): void {

@@ -114,8 +114,9 @@ describe('ProcessWagerTransactionUseCase', () => {
 		expect(ledgerEntries[0].direction).toBe(LedgerDirection.Debit);
 		expect(ledgerEntries[0].money.toJSON()).toEqual({ amount: '30.00', currency: 'BRL' });
 
-		expect(outboxRepository.items).toHaveLength(1);
-		expect(outboxRepository.items[0].eventType).toBe('WagerTransactionProcessed');
+		expect(outboxRepository.items).toHaveLength(2);
+		expect(outboxRepository.items.map(i => i.eventType)).toContain('WagerTransactionProcessed');
+		expect(outboxRepository.items.map(i => i.eventType)).toContain('WalletBalanceChanged');
 	});
 
 	it('should reject a BET when balance is insufficient with INSUFFICIENT_FUNDS without altering balance or ledger', async () => {
