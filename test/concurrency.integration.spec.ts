@@ -210,4 +210,176 @@ describe('Concurrency and Isolation', () => {
 		expect(reconciliation.storedBalance.amount).toBe('0.00');
 		expect(reconciliation.calculatedBalance.amount).toBe('0.00');
 	});
+
+	it('should process distinct wallets concurrently in parallel without lock contention', async () => {
+		const walletCount = 5;
+		const operationsPerWallet = 6;
+		const wallets = await Promise.all(
+			Array.from({ length: walletCount }, async () => {
+				const playerId = crypto.randomUUID();
+				return RequestContext.create(entityManager, async () =>
+					createWalletUseCase.execute({
+						playerId,
+						initialBalance: { amount: '100.00', currency: 'BRL' }
+					})
+				);
+			})
+		);
+
+		const operations: Promise<unknown>[] = [];
+
+		for (const wallet of wallets) {
+			for (let op = 0; op < operationsPerWallet; op++) {
+				const isWin = op >= 4;
+				operations.push(
+					RequestContext.create(entityManager, async () =>
+						processWagerUseCase.execute({
+							idempotencyKey: `${wallet.playerId}:op-${op}`,
+							providerId: 'provider-test',
+							externalTransactionId: `ext-${crypto.randomUUID()}`,
+							playerId: wallet.playerId,
+							walletId: wallet.id,
+							roundId: `round-${wallet.id}-${op}`,
+							gameId: 'game-concurrent',
+							kind: isWin ? WagerTransactionKind.Win : WagerTransactionKind.Bet,
+							money: { amount: isWin ? '15.00' : '10.00', currency: 'BRL' }
+						})
+					)
+				);
+			}
+		}
+
+		await Promise.all(operations);
+
+		for (const wallet of wallets) {
+			const reconciliation = await RequestContext.create(entityManager, async () =>
+				reconcileUseCase.execute({ walletId: wallet.id })
+			);
+			expect(reconciliation.consistent).toBe(true);
+			expect(reconciliation.storedBalance.amount).toBe('90.00');
+			expect(reconciliation.calculatedBalance.amount).toBe('90.00');
+		}
+	});
+
+	it('should maintain balance and ledger consistency when 3 concurrent app instances compete for the same wallet', async () => {
+		const app1 = await NestFactory.createApplicationContext(AppModule, { logger: false });
+		const app2 = await NestFactory.createApplicationContext(AppModule, { logger: false });
+		const app3 = await NestFactory.createApplicationContext(AppModule, { logger: false });
+
+		try {
+			const instances = [
+				{
+					app: app1,
+					em: app1.get(EntityManager),
+					processUseCase: app1.get(ProcessWagerTransactionUseCase)
+				},
+				{
+					app: app2,
+					em: app2.get(EntityManager),
+					processUseCase: app2.get(ProcessWagerTransactionUseCase)
+				},
+				{
+					app: app3,
+					em: app3.get(EntityManager),
+					processUseCase: app3.get(ProcessWagerTransactionUseCase)
+				}
+			];
+
+			const playerId = crypto.randomUUID();
+			const wallet = await RequestContext.create(entityManager, async () =>
+				createWalletUseCase.execute({
+					playerId,
+					initialBalance: { amount: '200.00', currency: 'BRL' }
+				})
+			);
+
+			const tasks: Promise<unknown>[] = [];
+			for (let i = 0; i < 15; i++) {
+				const instance = instances[i % 3];
+				tasks.push(
+					RequestContext.create(instance.em, async () =>
+						instance.processUseCase.execute({
+							idempotencyKey: `${playerId}:multi-inst-${i}`,
+							providerId: 'provider-test',
+							externalTransactionId: `ext-multi-${crypto.randomUUID()}`,
+							playerId,
+							walletId: wallet.id,
+							roundId: `round-${i}`,
+							gameId: 'game-multi',
+							kind: WagerTransactionKind.Bet,
+							money: { amount: '10.00', currency: 'BRL' }
+						})
+					)
+				);
+			}
+
+			await Promise.all(tasks);
+
+			const reconciliation = await RequestContext.create(entityManager, async () =>
+				reconcileUseCase.execute({ walletId: wallet.id })
+			);
+			expect(reconciliation.consistent).toBe(true);
+			expect(reconciliation.storedBalance.amount).toBe('50.00');
+			expect(reconciliation.calculatedBalance.amount).toBe('50.00');
+		} finally {
+			await app1.close();
+			await app2.close();
+			await app3.close();
+		}
+	}, 30000);
+
+	it('should verify final balance consistency across service shutdown and restart', async () => {
+		const playerId = crypto.randomUUID();
+		const wallet = await RequestContext.create(entityManager, async () =>
+			createWalletUseCase.execute({
+				playerId,
+				initialBalance: { amount: '150.00', currency: 'BRL' }
+			})
+		);
+
+		await RequestContext.create(entityManager, async () =>
+			processWagerUseCase.execute({
+				idempotencyKey: `${playerId}:restart-bet-1`,
+				providerId: 'provider-test',
+				externalTransactionId: `ext-${crypto.randomUUID()}`,
+				playerId,
+				walletId: wallet.id,
+				roundId: 'round-restart-1',
+				gameId: 'game-restart',
+				kind: WagerTransactionKind.Bet,
+				money: { amount: '50.00', currency: 'BRL' }
+			})
+		);
+
+		await RequestContext.create(entityManager, async () =>
+			processWagerUseCase.execute({
+				idempotencyKey: `${playerId}:restart-win-1`,
+				providerId: 'provider-test',
+				externalTransactionId: `ext-${crypto.randomUUID()}`,
+				playerId,
+				walletId: wallet.id,
+				roundId: 'round-restart-1',
+				gameId: 'game-restart',
+				kind: WagerTransactionKind.Win,
+				money: { amount: '80.00', currency: 'BRL' }
+			})
+		);
+
+		const restartedApp = await NestFactory.createApplicationContext(AppModule, { logger: false });
+		try {
+			const restartedEm = restartedApp.get(EntityManager);
+			const restartedReconcileUseCase = restartedApp.get(ReconcileWalletUseCase);
+
+			const reconciliation = await RequestContext.create(restartedEm, async () =>
+				restartedReconcileUseCase.execute({ walletId: wallet.id })
+			);
+
+			expect(reconciliation.consistent).toBe(true);
+			expect(reconciliation.storedBalance.amount).toBe('180.00');
+			expect(reconciliation.calculatedBalance.amount).toBe('180.00');
+			expect(reconciliation.checkedEntries).toBe(3);
+		} finally {
+			await restartedApp.close();
+		}
+	}, 30000);
 });
