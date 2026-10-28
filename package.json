@@ -8,6 +8,7 @@
 		"start": "bun src/main.ts",
 		"typecheck": "tsc --noEmit",
 		"test": "bun test",
+		"test:load": "bun test/load/load-test.ts",
 		"migration:create": "bunx --bun mikro-orm migration:create",
 		"migration:up": "bunx --bun mikro-orm migration:up",
 		"migration:down": "bunx --bun mikro-orm migration:down"
