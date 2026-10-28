@@ -5,6 +5,7 @@
 	"private": true,
 	"scripts": {
 		"dev": "bun --watch src/main.ts",
+		"start": "bun src/main.ts",
 		"typecheck": "tsc --noEmit",
 		"test": "bun test",
 		"migration:create": "bunx --bun mikro-orm migration:create",
