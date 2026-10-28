@@ -13,6 +13,7 @@ import { GetProviderTransactionUseCase } from './application/use-cases/get-provi
 import { GetWagerTransactionUseCase } from './application/use-cases/get-wager-transaction.use-case';
 import { ProcessWagerTransactionUseCase } from './application/use-cases/process-wager-transaction.use-case';
 import { WagerTransactionMikroOrmRepository } from './infrastructure/database/wager-transaction.mikro-orm.repository';
+import { PendingReferenceWorker } from './infrastructure/workers/pending-reference.worker';
 import { SqsConsumerWorker } from './infrastructure/workers/sqs-consumer.worker';
 import { WageringController } from './presentation/http/wagering.controller';
 import { WAGERING_TOKENS } from './wagering.tokens';
@@ -34,14 +35,16 @@ import { WAGERING_TOKENS } from './wagering.tokens';
 		ProcessWagerTransactionUseCase,
 		GetWagerTransactionUseCase,
 		GetProviderTransactionUseCase,
-		SqsConsumerWorker
+		SqsConsumerWorker,
+		PendingReferenceWorker
 	],
 	exports: [
 		WAGERING_TOKENS.REPOSITORY,
 		ProcessWagerTransactionUseCase,
 		GetWagerTransactionUseCase,
 		GetProviderTransactionUseCase,
-		SqsConsumerWorker
+		SqsConsumerWorker,
+		PendingReferenceWorker
 	]
 })
 export class WageringModule {}
