@@ -1,5 +1,6 @@
 import { Module, forwardRef } from '@nestjs/common';
 
+import { InboxModule } from '../inbox/inbox.module';
 import { OutboxModule } from '../outbox/outbox.module';
 import { WalletModule } from '../wallet/wallet.module';
 import { BetOperation } from './application/operations/bet.operation';
@@ -12,11 +13,12 @@ import { GetProviderTransactionUseCase } from './application/use-cases/get-provi
 import { GetWagerTransactionUseCase } from './application/use-cases/get-wager-transaction.use-case';
 import { ProcessWagerTransactionUseCase } from './application/use-cases/process-wager-transaction.use-case';
 import { WagerTransactionMikroOrmRepository } from './infrastructure/database/wager-transaction.mikro-orm.repository';
+import { SqsConsumerWorker } from './infrastructure/workers/sqs-consumer.worker';
 import { WageringController } from './presentation/http/wagering.controller';
 import { WAGERING_TOKENS } from './wagering.tokens';
 
 @Module({
-	imports: [forwardRef(() => WalletModule), OutboxModule],
+	imports: [forwardRef(() => WalletModule), OutboxModule, InboxModule],
 	controllers: [WageringController],
 	providers: [
 		{
@@ -31,13 +33,15 @@ import { WAGERING_TOKENS } from './wagering.tokens';
 		RollbackOperation,
 		ProcessWagerTransactionUseCase,
 		GetWagerTransactionUseCase,
-		GetProviderTransactionUseCase
+		GetProviderTransactionUseCase,
+		SqsConsumerWorker
 	],
 	exports: [
 		WAGERING_TOKENS.REPOSITORY,
 		ProcessWagerTransactionUseCase,
 		GetWagerTransactionUseCase,
-		GetProviderTransactionUseCase
+		GetProviderTransactionUseCase,
+		SqsConsumerWorker
 	]
 })
 export class WageringModule {}
