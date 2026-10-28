@@ -13,10 +13,13 @@
 	},
 	"devDependencies": {
 		"@mikro-orm/cli": "^7.2.5",
+		"@testcontainers/localstack": "^12.2.1",
+		"@testcontainers/postgresql": "^12.2.1",
 		"@types/bun": "latest",
 		"@types/node": "^26.6.5",
 		"@zyrohub/config-prettier": "^1.0.8",
 		"jiti": "^2.7.0",
+		"testcontainers": "^12.2.1",
 		"typescript": "^7.0.2"
 	},
 	"peerDependencies": {
