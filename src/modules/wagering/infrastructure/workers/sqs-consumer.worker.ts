@@ -1,9 +1,10 @@
 import { DeleteMessageCommand, type Message, ReceiveMessageCommand, SendMessageCommand } from '@aws-sdk/client-sqs';
-import { Inject, Injectable, Logger, type OnApplicationBootstrap, type OnApplicationShutdown } from '@nestjs/common';
+import { Inject, Injectable, Logger, OnApplicationBootstrap, OnApplicationShutdown } from '@nestjs/common';
 
+import { MetricsService } from '@/core/observability/services/metrics.service';
+import { RequestContextService } from '@/core/observability/services/request-context.service';
 import { settings } from '@/core/settings';
 import { SqsClientService } from '@/core/sqs/sqs-client.service';
-
 import type { IInboxRepository } from '@/modules/inbox/domain/inbox.repository.interface';
 import { INBOX_TOKENS } from '@/modules/inbox/inbox.tokens';
 
@@ -14,7 +15,6 @@ import { createWagerTransactionSchema } from '../../presentation/http/dto/create
 export class SqsConsumerWorker implements OnApplicationBootstrap, OnApplicationShutdown {
 	private readonly logger = new Logger(SqsConsumerWorker.name);
 	private readonly consumerName = 'WagerTransactionConsumer';
-
 	private isRunning = false;
 	private isProcessing = false;
 
@@ -22,7 +22,9 @@ export class SqsConsumerWorker implements OnApplicationBootstrap, OnApplicationS
 		@Inject(INBOX_TOKENS.REPOSITORY)
 		private readonly inboxRepository: IInboxRepository,
 		private readonly sqsClientService: SqsClientService,
-		private readonly processWagerTransactionUseCase: ProcessWagerTransactionUseCase
+		private readonly processWagerTransactionUseCase: ProcessWagerTransactionUseCase,
+		private readonly metricsService: MetricsService,
+		private readonly requestContextService: RequestContextService
 	) {}
 
 	onApplicationBootstrap(): void {
@@ -70,13 +72,14 @@ export class SqsConsumerWorker implements OnApplicationBootstrap, OnApplicationS
 					const processed = await this.processMessage(message);
 					if (processed) processedCount++;
 				} catch (error) {
+					this.metricsService.recordRetry('sqs_consumer');
 					this.logger.warn(`Transient error on message ${message.MessageId}: ${(error as Error).message}`);
 				}
 			}
 
 			return processedCount;
 		} catch (error) {
-			this.logger.error(`Error polling SQS: ${(error as Error).message}`);
+			this.logger.error(`Error polling SQS: ${(error as Error).message}`, (error as Error).stack);
 			await new Promise(resolve => setTimeout(resolve, 1000));
 			return 0;
 		} finally {
@@ -123,6 +126,7 @@ export class SqsConsumerWorker implements OnApplicationBootstrap, OnApplicationS
 		const existingInbox = await this.inboxRepository.findByMessageIdAndConsumer(messageId, this.consumerName);
 
 		if (existingInbox?.isProcessed()) {
+			this.metricsService.recordDuplicate('inbox');
 			await this.deleteFromQueue(message.ReceiptHandle);
 			return true;
 		}
@@ -132,22 +136,45 @@ export class SqsConsumerWorker implements OnApplicationBootstrap, OnApplicationS
 				? parsed.data.idempotencyKey
 				: `${validation.data.providerId}:${validation.data.externalTransactionId}`;
 
-		try {
-			await this.processWagerTransactionUseCase.execute({
-				...validation.data,
-				idempotencyKey,
-				inboxMessage: {
-					messageId,
-					consumerName: this.consumerName
-				}
-			});
+		return this.requestContextService.runWithContext(
+			{
+				correlationId: messageId,
+				messageId,
+				walletId: validation.data.walletId,
+				providerId: validation.data.providerId
+			},
+			async () => {
+				try {
+					await this.processWagerTransactionUseCase.execute({
+						...validation.data,
+						idempotencyKey,
+						inboxMessage: {
+							messageId,
+							consumerName: this.consumerName
+						}
+					});
 
-			await this.deleteFromQueue(message.ReceiptHandle);
-			return true;
-		} catch (error) {
-			this.logger.error(`Error processing message ${messageId}: ${(error as Error).message}`);
-			throw error;
-		}
+					await this.deleteFromQueue(message.ReceiptHandle!);
+					this.logger.log(`SQS message processed successfully`, {
+						messageId,
+						walletId: validation.data.walletId,
+						providerId: validation.data.providerId
+					});
+					return true;
+				} catch (error) {
+					this.logger.error(
+						`Error processing message ${messageId}: ${(error as Error).message}`,
+						(error as Error).stack,
+						{
+							messageId,
+							walletId: validation.data.walletId,
+							providerId: validation.data.providerId
+						}
+					);
+					throw error;
+				}
+			}
+		);
 	}
 
 	private async runLoop(): Promise<void> {
@@ -155,7 +182,7 @@ export class SqsConsumerWorker implements OnApplicationBootstrap, OnApplicationS
 			try {
 				await this.pollMessagesOnce();
 			} catch (error) {
-				this.logger.error(`Error in consumer loop: ${(error as Error).message}`);
+				this.logger.error(`Error in consumer loop: ${(error as Error).message}`, (error as Error).stack);
 				await new Promise(resolve => setTimeout(resolve, 1000));
 			}
 		}
@@ -163,6 +190,8 @@ export class SqsConsumerWorker implements OnApplicationBootstrap, OnApplicationS
 
 	private async sendToDlq(message: Message): Promise<void> {
 		if (!message.ReceiptHandle) return;
+
+		this.metricsService.recordDlq(settings.sqs.queues.wagerTransactionsDlq);
 
 		await this.sqsClientService.client.send(
 			new SendMessageCommand({

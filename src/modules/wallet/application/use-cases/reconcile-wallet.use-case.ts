@@ -62,9 +62,12 @@ export class ReconcileWalletUseCase {
 		const consistent = difference.isZero();
 
 		if (!consistent)
-			this.logger.warn(
-				`Wallet reconciliation discrepancy detected for wallet ${wallet.id}: stored=${storedBalance.toString()}, calculated=${calculated.toString()}, difference=${difference.toString()}`
-			);
+			this.logger.warn(`Wallet reconciliation discrepancy detected`, {
+				walletId: wallet.id,
+				storedBalance: storedBalance.toString(),
+				calculatedBalance: calculated.toString(),
+				difference: difference.toString()
+			});
 
 		return {
 			walletId: wallet.id,

@@ -8,6 +8,8 @@ import {
 import { Logger } from '@nestjs/common';
 import { beforeEach, describe, expect, it, mock, spyOn } from 'bun:test';
 
+import { MetricsService } from '@/core/observability/services/metrics.service';
+import { RequestContextService } from '@/core/observability/services/request-context.service';
 import type { SqsClientService } from '@/core/sqs/sqs-client.service';
 
 import { InboxMessage } from '@/modules/inbox/domain/inbox-message';
@@ -43,6 +45,9 @@ describe('SqsConsumerWorker', () => {
 
 	beforeEach(() => {
 		inboxRepository = new InboxMemoryRepository();
+		const metricsService = new MetricsService();
+		const requestContextService = new RequestContextService();
+
 		mockSqsClient = { send: mock() };
 		mockSqsClientService = {
 			client: mockSqsClient as unknown as SQSClient,
@@ -53,7 +58,9 @@ describe('SqsConsumerWorker', () => {
 		sut = new SqsConsumerWorker(
 			inboxRepository,
 			mockSqsClientService,
-			mockUseCase as unknown as ProcessWagerTransactionUseCase
+			mockUseCase as unknown as ProcessWagerTransactionUseCase,
+			metricsService,
+			requestContextService
 		);
 	});
 
