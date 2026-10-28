@@ -3,6 +3,7 @@ import { Module } from '@nestjs/common';
 import { AuthModule } from './core/auth/auth.module';
 import { DatabaseModule } from './core/database/database.module';
 import { HealthModule } from './core/health/health.module';
+import { ObservabilityModule } from './core/observability/observability.module';
 import { SqsModule } from './core/sqs/sqs.module';
 import { InboxModule } from './modules/inbox/inbox.module';
 import { OutboxModule } from './modules/outbox/outbox.module';
@@ -15,6 +16,7 @@ import { SharedModule } from './shared/shared.module';
 		AuthModule,
 		DatabaseModule,
 		SharedModule,
+		ObservabilityModule,
 		SqsModule,
 		HealthModule,
 		InboxModule,
