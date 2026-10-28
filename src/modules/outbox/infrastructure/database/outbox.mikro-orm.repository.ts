@@ -28,6 +28,10 @@ export class OutboxMikroOrmRepository implements IOutboxRepository {
 		return records.map(r => OutboxMessageMapper.toDomain(r));
 	}
 
+	async countPending(): Promise<number> {
+		return this.entityManager.count(OutboxMessageSchema, { publishedAt: null });
+	}
+
 	async create(message: OutboxMessage): Promise<void> {
 		const record = this.entityManager.create(OutboxMessageSchema, OutboxMessageMapper.toPersistence(message));
 		this.entityManager.persist(record);

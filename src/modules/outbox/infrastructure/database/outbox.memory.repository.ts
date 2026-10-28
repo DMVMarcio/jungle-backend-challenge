@@ -11,6 +11,10 @@ export class OutboxMemoryRepository implements IOutboxRepository {
 		return this.items.filter(m => m.isDue(now)).slice(0, limit);
 	}
 
+	async countPending(): Promise<number> {
+		return this.items.filter(m => m.isPending()).length;
+	}
+
 	async create(message: OutboxMessage): Promise<void> {
 		this.items.push(message);
 	}
