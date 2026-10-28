@@ -18,5 +18,6 @@ export default defineConfig({
 		min: settings.database.poolMin,
 		max: settings.database.poolMax
 	},
+	allowGlobalContext: true,
 	debug: settings.nodeEnv === 'development'
 });
