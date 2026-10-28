@@ -1,26 +1,16 @@
-import {
-	Body,
-	Controller,
-	Get,
-	Headers,
-	HttpStatus,
-	Param,
-	Post,
-	Res,
-	UsePipes
-} from '@nestjs/common';
+import { Body, Controller, Get, Headers, HttpStatus, Param, Post, Res, UseGuards, UsePipes } from '@nestjs/common';
 import type { FastifyReply } from 'fastify';
+
+import { ProviderAuthGuard } from '@/core/auth/guards/provider-auth.guard';
 
 import { GetProviderTransactionUseCase } from '@/modules/wagering/application/use-cases/get-provider-transaction.use-case';
 import { GetWagerTransactionUseCase } from '@/modules/wagering/application/use-cases/get-wager-transaction.use-case';
 import { ProcessWagerTransactionUseCase } from '@/modules/wagering/application/use-cases/process-wager-transaction.use-case';
 import { WagerTransactionStatus } from '@/modules/wagering/domain/wager-transaction';
+
 import { ZodValidationPipe } from '@/shared/presentation/http/pipes/zod-validation.pipe';
 
-import {
-	type CreateWagerTransactionDto,
-	createWagerTransactionSchema
-} from './dto/create-wager-transaction.dto';
+import { type CreateWagerTransactionDto, createWagerTransactionSchema } from './dto/create-wager-transaction.dto';
 import {
 	type ProviderTransactionParamsDto,
 	type WagerTransactionIdParamDto,
@@ -29,6 +19,7 @@ import {
 } from './dto/wager-transaction-params.dto';
 
 @Controller()
+@UseGuards(ProviderAuthGuard)
 export class WageringController {
 	constructor(
 		private readonly processWagerTransactionUseCase: ProcessWagerTransactionUseCase,
@@ -43,8 +34,7 @@ export class WageringController {
 		@Body() body: CreateWagerTransactionDto,
 		@Res({ passthrough: true }) res: FastifyReply
 	) {
-		const idempotencyKey =
-			idempotencyKeyHeader?.trim() || `${body.providerId}:${body.externalTransactionId}`;
+		const idempotencyKey = idempotencyKeyHeader?.trim() || `${body.providerId}:${body.externalTransactionId}`;
 
 		const result = await this.processWagerTransactionUseCase.execute({
 			...body,

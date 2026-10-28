@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 
+import { AuthModule } from './core/auth/auth.module';
 import { DatabaseModule } from './core/database/database.module';
 import { HealthModule } from './core/health/health.module';
 import { SqsModule } from './core/sqs/sqs.module';
@@ -11,6 +12,7 @@ import { SharedModule } from './shared/shared.module';
 
 @Module({
 	imports: [
+		AuthModule,
 		DatabaseModule,
 		SharedModule,
 		SqsModule,
