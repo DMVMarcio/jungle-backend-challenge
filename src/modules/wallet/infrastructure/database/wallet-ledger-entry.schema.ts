@@ -1,7 +1,6 @@
 import { EntitySchema } from '@mikro-orm/core';
 
 import { MoneyAmountType } from '@/core/database/types/money-amount.type';
-
 import { LedgerDirection } from '@/modules/wallet/domain/wallet-ledger-entry';
 
 export interface WalletLedgerEntryDbRecord {
@@ -30,5 +29,6 @@ export const WalletLedgerEntrySchema = new EntitySchema<WalletLedgerEntryDbRecor
 		currency: { type: 'varchar(3)' },
 		createdAt: { type: 'Date', defaultRaw: 'CURRENT_TIMESTAMP', index: true }
 	},
+	uniques: [{ properties: ['walletId', 'transactionId'] }],
 	indexes: [{ properties: ['walletId', 'createdAt'] }]
 });
