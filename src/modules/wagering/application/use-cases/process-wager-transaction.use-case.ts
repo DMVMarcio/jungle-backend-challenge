@@ -1,5 +1,7 @@
 import { EntityManager } from '@mikro-orm/postgresql';
-import { Inject, Injectable, Optional } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
+
+import { MetricsService } from '@/core/observability/services/metrics.service';
 
 import { InboxMessage } from '@/modules/inbox/domain/inbox-message';
 import type { IInboxRepository } from '@/modules/inbox/domain/inbox.repository.interface';
@@ -67,6 +69,7 @@ export interface ProcessWagerTransactionOutput {
 
 @Injectable()
 export class ProcessWagerTransactionUseCase {
+	private readonly logger = new Logger(ProcessWagerTransactionUseCase.name);
 	private readonly operations: Record<WagerTransactionKind, IWageringOperation | undefined>;
 
 	constructor(
@@ -92,6 +95,7 @@ export class ProcessWagerTransactionUseCase {
 		private readonly refundOperation: RefundOperation,
 		private readonly rollbackOperation: RollbackOperation,
 		private readonly entityManager: EntityManager,
+		private readonly metricsService: MetricsService,
 
 		@Optional()
 		@Inject(INBOX_TOKENS.REPOSITORY)
@@ -112,19 +116,28 @@ export class ProcessWagerTransactionUseCase {
 		const payloadHash = this.computePayloadHash(input, money);
 
 		const existingTransaction = await this.wageringRepository.findByIdempotencyKey(input.idempotencyKey);
-		if (existingTransaction) return this.handleIdempotentReplay(existingTransaction, payloadHash, money);
+		if (existingTransaction) {
+			this.metricsService.recordDuplicate('idempotency');
+			return this.handleIdempotentReplay(existingTransaction, payloadHash, money);
+		}
 
 		const existingByExternal = await this.assertNoDuplicateExternalTransaction(
 			input.providerId,
 			input.externalTransactionId,
 			input.idempotencyKey
 		);
-		if (existingByExternal) return this.handleIdempotentReplay(existingByExternal, payloadHash, money);
+		if (existingByExternal) {
+			this.metricsService.recordDuplicate('idempotency');
+			return this.handleIdempotentReplay(existingByExternal, payloadHash, money);
+		}
 
 		try {
 			return await this.entityManager.transactional(async () => {
 				const existingInside = await this.wageringRepository.findByIdempotencyKey(input.idempotencyKey);
-				if (existingInside) return this.handleIdempotentReplay(existingInside, payloadHash, money);
+				if (existingInside) {
+					this.metricsService.recordDuplicate('idempotency');
+					return this.handleIdempotentReplay(existingInside, payloadHash, money);
+				}
 
 				const wallet = await this.loadAndValidateWallet(input.walletId, input.playerId, money.currency);
 				const transaction = this.createTransaction(input, money, payloadHash);
@@ -150,6 +163,15 @@ export class ProcessWagerTransactionUseCase {
 					await this.inboxRepository.create(inbox);
 				}
 
+				this.metricsService.recordTransaction(transaction.status);
+				this.logger.debug(`Wager transaction processed`, {
+					transactionId: transaction.id,
+					walletId: wallet.id,
+					providerId: transaction.providerId,
+					status: transaction.status,
+					kind: transaction.kind
+				});
+
 				return {
 					transactionId: transaction.id,
 					status: transaction.status,
@@ -163,12 +185,13 @@ export class ProcessWagerTransactionUseCase {
 
 			const databaseException = error as { code?: string; name?: string } | null | undefined;
 			const isUniqueViolation =
-				databaseException?.code === '23505' ||
-				databaseException?.name === 'UniqueConstraintViolationException';
+				databaseException?.code === '23505' || databaseException?.name === 'UniqueConstraintViolationException';
 
 			if (isUniqueViolation) {
+				this.metricsService.recordLockConflict();
 				const concurrentTransaction = await this.wageringRepository.findByIdempotencyKey(input.idempotencyKey);
 				if (concurrentTransaction) {
+					this.metricsService.recordDuplicate('idempotency');
 					return this.handleIdempotentReplay(concurrentTransaction, payloadHash, money);
 				}
 			}
@@ -228,20 +251,26 @@ export class ProcessWagerTransactionUseCase {
 		idempotencyKey: string
 	): Promise<WagerTransaction | null> {
 		const existing = await this.wageringRepository.findByProviderAndExternalId(providerId, externalTransactionId);
-		if (existing) {
-			if (existing.idempotencyKey !== idempotencyKey) {
-				throw new IdempotencyConflictError(idempotencyKey);
-			}
-			return existing;
+		if (!existing) return null;
+
+		if (existing.idempotencyKey !== idempotencyKey) {
+			throw new IdempotencyConflictError(idempotencyKey);
 		}
-		return null;
+
+		return existing;
 	}
 
-	private async loadAndValidateWallet(walletId: string, playerId: string, expectedCurrency: string): Promise<Wallet> {
+	private async loadAndValidateWallet(walletId: string, playerId: string, currency: string): Promise<Wallet> {
 		const wallet = await this.walletRepository.findByIdWithLock(walletId);
 		if (!wallet) throw new WalletNotFoundError(walletId);
-		if (wallet.playerId !== playerId) throw new WalletOwnershipError(walletId, playerId);
-		if (wallet.currency !== expectedCurrency) throw new CurrencyMismatchError(wallet.currency, expectedCurrency);
+
+		if (wallet.playerId !== playerId) {
+			throw new WalletOwnershipError(walletId, playerId);
+		}
+
+		if (wallet.currency !== currency) {
+			throw new CurrencyMismatchError(wallet.currency, currency);
+		}
 
 		return wallet;
 	}
@@ -251,14 +280,15 @@ export class ProcessWagerTransactionUseCase {
 		money: Money,
 		payloadHash: string
 	): WagerTransaction {
+		const id = this.idGenerator.generate();
 		return WagerTransaction.create({
-			id: this.idGenerator.generate(),
+			id,
 			providerId: input.providerId,
 			externalTransactionId: input.externalTransactionId,
 			idempotencyKey: input.idempotencyKey,
 			payloadHash,
-			walletId: input.walletId,
 			playerId: input.playerId,
+			walletId: input.walletId,
 			roundId: input.roundId,
 			gameId: input.gameId,
 			kind: input.kind,
@@ -271,9 +301,9 @@ export class ProcessWagerTransactionUseCase {
 		wallet: Wallet,
 		transaction: WagerTransaction
 	): Promise<WalletLedgerEntry | undefined> {
-		const handler = this.operations[transaction.kind];
-		if (!handler) return undefined;
+		const operation = this.operations[transaction.kind];
+		if (!operation) return undefined;
 
-		return handler.execute(wallet, transaction);
+		return operation.execute(wallet, transaction);
 	}
 }

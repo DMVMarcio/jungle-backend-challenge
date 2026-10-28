@@ -1,6 +1,7 @@
 import { EntityManager } from '@mikro-orm/postgresql';
 import { beforeEach, describe, expect, it } from 'bun:test';
 
+import { MetricsService } from '@/core/observability/services/metrics.service';
 import { InboxMemoryRepository } from '@/modules/inbox/infrastructure/database/inbox.memory.repository';
 import { OutboxMemoryRepository } from '@/modules/outbox/infrastructure/database/outbox.memory.repository';
 import { WagerTransactionKind, WagerTransactionStatus } from '@/modules/wagering/domain/wager-transaction';
@@ -61,6 +62,7 @@ describe('ProcessWagerTransactionUseCase', () => {
 		const lossOperation = new LossOperation();
 		const refundOperation = new RefundOperation(wageringRepository);
 		const rollbackOperation = new RollbackOperation(wageringRepository);
+		const metricsService = new MetricsService();
 
 		sut = new ProcessWagerTransactionUseCase(
 			wageringRepository,
@@ -75,6 +77,7 @@ describe('ProcessWagerTransactionUseCase', () => {
 			refundOperation,
 			rollbackOperation,
 			entityManager,
+			metricsService,
 			inboxRepository
 		);
 
