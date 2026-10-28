@@ -4,11 +4,11 @@ import { type AuthenticatedProvider, IProviderIdentityPort } from '../ports/prov
 
 @Injectable()
 export class ProviderIdentityAdapter implements IProviderIdentityPort {
-	async authenticate(tokenOrKey: string): Promise<AuthenticatedProvider | null> {
-		const raw = tokenOrKey.trim();
-		if (!raw) return null;
+	async authenticate(authHeader: string): Promise<AuthenticatedProvider | null> {
+		const raw = authHeader.trim();
+		if (!raw || !raw.startsWith('Bearer ')) return null;
 
-		const token = raw.startsWith('Bearer ') ? raw.slice(7).trim() : raw;
+		const token = raw.slice(7).trim();
 		if (!token) return null;
 
 		let providerId = token;

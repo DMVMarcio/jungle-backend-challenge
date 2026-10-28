@@ -5,5 +5,5 @@ export interface AuthenticatedProvider {
 }
 
 export abstract class IProviderIdentityPort {
-	abstract authenticate(tokenOrKey: string): Promise<AuthenticatedProvider | null>;
+	abstract authenticate(authHeader: string): Promise<AuthenticatedProvider | null>;
 }
