@@ -3,8 +3,16 @@ import { BusinessRuleError, ConflictError, NotFoundError, ValidationError } from
 export class InsufficientFundsError extends BusinessRuleError {
 	readonly code = 'INSUFFICIENT_FUNDS';
 
-	constructor(current_balance: string, requested_amount: string) {
-		super(`Insufficient funds: current balance is ${current_balance}, requested ${requested_amount}`);
+	constructor(currentBalance: string, requestedAmount: string) {
+		super(`Insufficient funds: current balance is ${currentBalance}, requested ${requestedAmount}`);
+	}
+}
+
+export class WalletOwnershipError extends BusinessRuleError {
+	readonly code = 'WALLET_OWNERSHIP_MISMATCH';
+
+	constructor(walletId: string, playerId: string) {
+		super(`Wallet with id ${walletId} does not belong to player ${playerId}`);
 	}
 }
 

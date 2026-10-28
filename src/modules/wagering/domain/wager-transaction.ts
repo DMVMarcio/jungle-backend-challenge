@@ -212,6 +212,34 @@ export class WagerTransaction {
 		return this.payloadHash === payloadHash;
 	}
 
+	validateReference(reference: WagerTransaction): FailureCode | null {
+		if (
+			reference.providerId !== this.providerId ||
+			reference.playerId !== this.playerId ||
+			reference.walletId !== this.walletId ||
+			reference.roundId !== this.roundId ||
+			reference.money.currency !== this.money.currency
+		)
+			return 'REFERENCE_NOT_FOUND';
+
+		if (reference.status !== WagerTransactionStatus.Processed) return 'REFERENCE_NOT_FOUND';
+
+		if (this.kind === WagerTransactionKind.Refund && reference.kind !== WagerTransactionKind.Bet)
+			return 'INVALID_REFERENCE_KIND';
+
+		if (
+			this.kind === WagerTransactionKind.Rollback &&
+			reference.kind !== WagerTransactionKind.Bet &&
+			reference.kind !== WagerTransactionKind.Win &&
+			reference.kind !== WagerTransactionKind.Refund
+		)
+			return 'INVALID_REFERENCE_KIND';
+
+		if (!reference.money.equals(this.money)) return 'AMOUNT_MISMATCH';
+
+		return null;
+	}
+
 	ledgerDirectionFor(reference?: WagerTransaction): LedgerDirection {
 		switch (this.kind) {
 			case WagerTransactionKind.Bet:
