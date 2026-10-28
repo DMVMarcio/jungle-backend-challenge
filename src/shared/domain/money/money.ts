@@ -8,7 +8,8 @@ export interface MoneyProps {
 }
 
 export class Money {
-	private static readonly AMOUNT_REGEX = /^\d+(\.\d{1,2})?$/;
+	private static readonly AMOUNT_REGEX = /^\d+\.\d{2}$/;
+	private static readonly CURRENCY_REGEX = /^[A-Z]{3}$/;
 
 	private constructor(
 		private readonly value: Decimal,
@@ -20,7 +21,7 @@ export class Money {
 		const amount = props?.amount?.trim();
 
 		if (!amount || !this.AMOUNT_REGEX.test(amount))
-			throw new InvalidMoneyError(`Amount '${props?.amount}' must be a positive decimal string`);
+			throw new InvalidMoneyError(`Amount '${props?.amount}' must be a decimal string with 2 fixed decimal places`);
 
 		return new Money(new Decimal(amount), currency);
 	}
@@ -31,7 +32,8 @@ export class Money {
 
 	private static normalizeCurrency(currency: string): string {
 		const normalized = currency?.trim().toUpperCase();
-		if (!normalized) throw new InvalidMoneyError('Currency is required');
+		if (!normalized || !this.CURRENCY_REGEX.test(normalized))
+			throw new InvalidMoneyError(`Currency '${currency}' must be a 3-letter ISO-4217 code`);
 
 		return normalized;
 	}

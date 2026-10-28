@@ -6,7 +6,7 @@ import { CurrencyMismatchError, InvalidMoneyError } from './money.errors';
 describe('Money Value Object', () => {
 	describe('Creation & Validation', () => {
 		it('should create money with normalized currency and 2 decimal places', () => {
-			const money = Money.from({ amount: '25', currency: 'brl' });
+			const money = Money.from({ amount: '25.00', currency: 'brl' });
 
 			expect(money.currency).toBe('BRL');
 			expect(money.toJSON()).toEqual({ amount: '25.00', currency: 'BRL' });
@@ -19,16 +19,18 @@ describe('Money Value Object', () => {
 		});
 
 		it('should reject invalid amount formats', () => {
-			const invalidAmounts = ['-10.00', '25.555', 'abc', '', '   ', '1e5', 'NaN', 'Infinity'];
+			const invalidAmounts = ['-10.00', '25', '100.5', '25.555', 'abc', '', '   ', '1e5', 'NaN', 'Infinity'];
 
 			for (const amount of invalidAmounts) {
 				expect(() => Money.from({ amount, currency: 'BRL' })).toThrow(InvalidMoneyError);
 			}
 		});
 
-		it('should reject missing or blank currency', () => {
+		it('should reject missing, blank or invalid ISO-4217 currency', () => {
 			expect(() => Money.from({ amount: '10.00', currency: '' })).toThrow(InvalidMoneyError);
 			expect(() => Money.from({ amount: '10.00', currency: '   ' })).toThrow(InvalidMoneyError);
+			expect(() => Money.from({ amount: '10.00', currency: 'BR' })).toThrow(InvalidMoneyError);
+			expect(() => Money.from({ amount: '10.00', currency: '123' })).toThrow(InvalidMoneyError);
 			expect(() => Money.zero('')).toThrow(InvalidMoneyError);
 		});
 	});
@@ -74,7 +76,7 @@ describe('Money Value Object', () => {
 		it('should correctly determine isZero()', () => {
 			const zeroMoney = Money.from({ amount: '0.00', currency: 'BRL' });
 
-			const positiveMoney = Money.from({ amount: '10.0', currency: 'BRL' });
+			const positiveMoney = Money.from({ amount: '10.00', currency: 'BRL' });
 			const negativeMoney = positiveMoney.negate();
 
 			expect(zeroMoney.isZero()).toBe(true);
@@ -85,7 +87,7 @@ describe('Money Value Object', () => {
 		it('should correctly determine isPositive()', () => {
 			const zeroMoney = Money.zero('BRL');
 
-			const positiveMoney = Money.from({ amount: '10.0', currency: 'BRL' });
+			const positiveMoney = Money.from({ amount: '10.00', currency: 'BRL' });
 			const negativeMoney = positiveMoney.negate();
 
 			expect(positiveMoney.isPositive()).toBe(true);
@@ -96,7 +98,7 @@ describe('Money Value Object', () => {
 		it('should correctly determine isNegative()', () => {
 			const zeroMoney = Money.zero('BRL');
 
-			const positiveMoney = Money.from({ amount: '10.0', currency: 'BRL' });
+			const positiveMoney = Money.from({ amount: '10.00', currency: 'BRL' });
 			const negativeMoney = positiveMoney.negate();
 
 			expect(negativeMoney.isNegative()).toBe(true);
@@ -161,7 +163,7 @@ describe('Money Value Object', () => {
 
 	describe('Serialization', () => {
 		it('should serialize to JSON with 2 fixed decimal places', () => {
-			const money = Money.from({ amount: '100.5', currency: 'BRL' });
+			const money = Money.from({ amount: '100.50', currency: 'BRL' });
 
 			expect(money.toJSON()).toEqual({
 				amount: '100.50',
