@@ -4,7 +4,7 @@ import type { IWagerTransactionRepository } from '@/modules/wagering/domain/wage
 import { WagerTransactionNotFoundError } from '@/modules/wagering/domain/wagering.errors';
 import { WAGERING_TOKENS } from '@/modules/wagering/wagering.tokens';
 
-import type { WagerTransactionOutput } from './get-wager-transaction.use-case';
+import { type WagerTransactionOutput, toWagerTransactionOutput } from './get-wager-transaction.use-case';
 
 export interface GetProviderTransactionInput {
 	providerId: string;
@@ -25,23 +25,6 @@ export class GetProviderTransactionUseCase {
 		);
 		if (!transaction) throw new WagerTransactionNotFoundError(`${input.providerId}:${input.externalTransactionId}`);
 
-		return {
-			id: transaction.id,
-			providerId: transaction.providerId,
-			externalTransactionId: transaction.externalTransactionId,
-			idempotencyKey: transaction.idempotencyKey,
-			walletId: transaction.walletId,
-			playerId: transaction.playerId,
-			roundId: transaction.roundId,
-			gameId: transaction.gameId,
-			kind: transaction.kind,
-			money: transaction.money.toJSON(),
-			referenceExternalTransactionId: transaction.referenceExternalTransactionId,
-			referenceTransactionId: transaction.referenceTransactionId,
-			status: transaction.status,
-			failureCode: transaction.failureCode,
-			createdAt: transaction.createdAt,
-			processedAt: transaction.processedAt
-		};
+		return toWagerTransactionOutput(transaction);
 	}
 }

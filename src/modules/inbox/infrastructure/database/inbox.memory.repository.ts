@@ -14,12 +14,4 @@ export class InboxMemoryRepository implements IInboxRepository {
 	async create(message: InboxMessage): Promise<void> {
 		this.items.push(message);
 	}
-
-	async update(message: InboxMessage): Promise<void> {
-		const index = this.items.findIndex(
-			item => item.messageId === message.messageId && item.consumerName === message.consumerName
-		);
-
-		if (index >= 0) this.items[index] = message;
-	}
 }

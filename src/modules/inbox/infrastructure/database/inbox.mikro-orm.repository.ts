@@ -24,15 +24,4 @@ export class InboxMikroOrmRepository implements IInboxRepository {
 
 		await this.entityManager.flush();
 	}
-
-	async update(message: InboxMessage): Promise<void> {
-		const record = await this.entityManager.findOne(InboxMessageSchema, {
-			messageId: message.messageId,
-			consumerName: message.consumerName
-		});
-		if (!record) return;
-
-		this.entityManager.assign(record, InboxMessageMapper.toPersistence(message));
-		await this.entityManager.flush();
-	}
 }
