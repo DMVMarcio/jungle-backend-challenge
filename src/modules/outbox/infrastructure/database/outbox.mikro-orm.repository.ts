@@ -1,4 +1,4 @@
-import { EntityManager } from '@mikro-orm/postgresql';
+import { EntityManager, LockMode } from '@mikro-orm/postgresql';
 import { Injectable } from '@nestjs/common';
 
 import { OutboxMessage } from '@/modules/outbox/domain/outbox-message';
@@ -20,7 +20,8 @@ export class OutboxMikroOrmRepository implements IOutboxRepository {
 			},
 			{
 				limit,
-				orderBy: { occurredAt: 'ASC', id: 'ASC' }
+				orderBy: { occurredAt: 'ASC', id: 'ASC' },
+				lockMode: LockMode.PESSIMISTIC_PARTIAL_WRITE
 			}
 		);
 
