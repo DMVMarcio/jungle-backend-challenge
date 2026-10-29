@@ -93,8 +93,9 @@ describe('Create Wallet UseCase', () => {
 		expect(openingTransaction.money.toJSON()).toEqual({ amount: '100.00', currency: 'BRL' });
 		expect(openingTransaction.idempotencyKey).toBe(`opening:${output.id}`);
 
-		expect(outboxRepository.items).toHaveLength(1);
-		expect(outboxRepository.items[0].eventType).toBe('WalletBalanceChanged');
+		expect(outboxRepository.items).toHaveLength(2);
+		expect(outboxRepository.items.map(i => i.eventType)).toContain('WagerTransactionProcessed');
+		expect(outboxRepository.items.map(i => i.eventType)).toContain('WalletBalanceChanged');
 	});
 
 	it('should throw WalletAlreadyExistsError when wallet already exists for player and currency', async () => {

@@ -5,6 +5,7 @@ import { RequestContextService } from '@/core/observability/services/request-con
 import { OutboxMessage } from '@/modules/outbox/domain/outbox-message';
 import type { IOutboxRepository } from '@/modules/outbox/domain/outbox.repository.interface';
 import { OUTBOX_TOKENS } from '@/modules/outbox/outbox.tokens';
+import { WagerTransactionProcessed } from '@/modules/wagering/domain/events/wager-transaction-processed.event';
 import { WagerTransaction, WagerTransactionKind } from '@/modules/wagering/domain/wager-transaction';
 import type { IWagerTransactionRepository } from '@/modules/wagering/domain/wager-transaction.repository.interface';
 import { WAGERING_TOKENS } from '@/modules/wagering/wagering.tokens';
@@ -104,9 +105,30 @@ export class CreateWalletUseCase {
 
 				openingTransaction.markProcessed(undefined, wallet.createdAt);
 
+				const correlationId = this.requestContextService.getCorrelationId() ?? openingTransactionId;
+
+				const transactionProcessedEvent = new WagerTransactionProcessed({
+					eventId: this.idGenerator.generate(),
+					aggregateId: openingTransactionId,
+					correlationId,
+					causationId: openingTransactionId,
+					occurredAt: wallet.createdAt,
+					data: {
+						transactionId: openingTransaction.id,
+						providerId: openingTransaction.providerId,
+						externalTransactionId: openingTransaction.externalTransactionId,
+						playerId: openingTransaction.playerId,
+						walletId: openingTransaction.walletId,
+						roundId: openingTransaction.roundId,
+						gameId: openingTransaction.gameId,
+						kind: openingTransaction.kind,
+						money: openingTransaction.money.toJSON()
+					}
+				});
+
 				const balanceChangedEvent = WalletBalanceChanged.from(wallet, ledgerEntry, {
 					eventId: this.idGenerator.generate(),
-					correlationId: this.requestContextService.getCorrelationId() ?? openingTransactionId,
+					correlationId,
 					causationId: openingTransactionId
 				});
 
@@ -114,6 +136,7 @@ export class CreateWalletUseCase {
 					await this.walletRepository.create(wallet);
 					await this.ledgerRepository.create(ledgerEntry);
 					await this.wageringRepository.create(openingTransaction);
+					await this.outboxRepository.create(OutboxMessage.enqueue(transactionProcessedEvent));
 					await this.outboxRepository.create(OutboxMessage.enqueue(balanceChangedEvent));
 				});
 			} else {
