@@ -79,7 +79,7 @@ The API strictly distinguishes validation errors, idempotency conflicts, busines
 | HTTP Status | Condition / Domain Error | Resulting Status / Failure Code | Retry Strategy |
 |---|---|---|---|
 | **200 OK** | Successful operation execution or idempotent replay | `status: "PROCESSED"`, `idempotentReplay: true/false` | Completed. Do not retry. |
-| **202 Accepted** | Out-of-order `REFUND` or `ROLLBACK` waiting for reference `BET` | `status: "PENDING_REFERENCE"` | Accepted. Poll status via GET. |
+| **202 Accepted** | Out-of-order `REFUND`, `ROLLBACK` or `WIN` waiting for reference `BET` | `status: "PENDING_REFERENCE"` | Accepted. Poll status via GET. |
 | **400 Bad Request** | Schema validation error, missing or mismatched `Idempotency-Key` header | Schema validation details | Fix payload before retrying. |
 | **401 Unauthorized** | Missing or invalid Bearer token in production mode | Unauthorized error | Refresh token and retry. |
 | **403 Forbidden** | Provider anti-spoofing mismatch or `WalletOwnershipError` | Forbidden error | Fix credentials / ownership. |
@@ -89,14 +89,15 @@ The API strictly distinguishes validation errors, idempotency conflicts, busines
 | **422 Unprocessable** | Currency does not match target wallet currency | `failureCode: "CURRENCY_MISMATCH"` | Non-retryable. Currency error. |
 | **422 Unprocessable** | Reference transaction expired or not found | `failureCode: "REFERENCE_NOT_FOUND"` | Non-retryable without reference. |
 | **422 Unprocessable** | Reference `BET` already reversed by earlier `REFUND` or `ROLLBACK` | `failureCode: "REFERENCE_ALREADY_REVERSED"` | Non-retryable. Double reversal blocked. |
-| **422 Unprocessable** | Reference mismatch (provider, player, wallet, round, currency, kind) | `failureCode: "REFERENCE_*_MISMATCH"` | Non-retryable. Fix reference params. |
+| **422 Unprocessable** | Reference context mismatch (provider, player, wallet, round, currency) | `failureCode: "REFERENCE_CONTEXT_MISMATCH"` | Non-retryable. Fix reference params. |
+| **422 Unprocessable** | Reference not in PROCESSED status or invalid kind | `failureCode: "INVALID_REFERENCE_STATE"` / `"INVALID_REFERENCE_KIND"` | Non-retryable. Verify reference state. |
 | **500 Internal Error** | Unhandled infrastructure failure (e.g. database unreachable) | Internal server error | Retryable with exponential backoff. |
 
 ---
 
 ## 7. Asynchronous Messaging (Transactional Outbox & Inbox)
 
-- **Transactional Outbox:** Domain events (`WagerTransactionProcessed`, `WagerTransactionRejected`, `WalletBalanceChanged`, `WagerTransactionPendingReference`) are committed atomically within the database transaction alongside financial mutations. `OutboxPublisherWorker` polls via `FOR UPDATE SKIP LOCKED` and publishes to the dedicated events queue (`wager-events.fifo`). Batched updates (`updateMany`) prevent concurrent entity manager flushes.
+- **Transactional Outbox:** Domain events (`WagerTransactionProcessed`, `WagerTransactionRejected`, `WalletBalanceChanged`, `WagerTransactionPendingReference`) are committed atomically within the database transaction alongside financial mutations. `OutboxPublisherWorker` polls via `FOR UPDATE SKIP LOCKED` and publishes to the dedicated events queue (`wager-events.fifo`). Messages are grouped by `MessageGroupId` (`walletId`), publishing sequentially within each group while distinct groups run concurrently to strictly guarantee FIFO order per wallet. Poison pills are bounded by `MAX_ATTEMPTS = 10`.
 - **AWS SQS FIFO Queues:**
   - Commands on `wager-transactions.fifo`, events on `wager-events.fifo`, and dead-letters on `wager-transactions-dlq.fifo`.
   - `MessageGroupId = walletId` guarantees per-wallet ordering with parallel multi-wallet throughput.
@@ -113,10 +114,12 @@ Wagering operations follow a state machine:
 BET -> WIN | LOSS | REFUND | ROLLBACK
 ```
 
-When a dependent transaction (`REFUND` or `ROLLBACK`) arrives before its referenced `BET`:
+When a dependent transaction (`REFUND`, `ROLLBACK` or out-of-order `WIN`) arrives before its referenced `BET`:
 - The transaction transitions to `PENDING_REFERENCE` (HTTP 202) without mutating wallet balance or creating ledger entries.
-- A scheduled worker (`PendingReferenceWorker`) periodically re-evaluates pending transactions using `FOR UPDATE SKIP LOCKED`.
-- Once the referenced transaction is committed, the worker completes the financial reversal and outbox event emissions.
+- A scheduled worker (`PendingReferenceWorker`) periodically re-evaluates pending transactions filtered by `next_attempt_at <= now` using `FOR UPDATE SKIP LOCKED`.
+- Worker manages retry state (`attempts`, `next_attempt_at`) directly in the database, ensuring resilience and coordination across multiple horizontal worker instances.
+- Each pending item is evaluated in an isolated individual database transaction, eliminating cross-wallet lock contention and cascade rollbacks.
+- Once the referenced transaction is committed, the worker completes the financial mutations and outbox event emissions.
 - If the reference does not arrive within a 5-minute TTL, the transaction moves to terminal `REJECTED` status with `failureCode: 'REFERENCE_NOT_FOUND'`.
 
 ---
