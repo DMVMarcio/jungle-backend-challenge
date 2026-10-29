@@ -101,7 +101,7 @@ describe('SqsConsumerWorker', () => {
 		expect(command).toBeInstanceOf(DeleteMessageCommand);
 	});
 
-	it('should acknowledge and delete integration event without sending to DLQ', async () => {
+	it('should route unexpected integration event on command queue directly to DLQ', async () => {
 		mockSqsClient.send.mockResolvedValue({});
 
 		const sqsMessage: Message = {
@@ -121,10 +121,11 @@ describe('SqsConsumerWorker', () => {
 
 		const result = await sut.processMessage(sqsMessage);
 
-		expect(result).toBe(true);
+		expect(result).toBe(false);
 		expect(mockUseCase.execute).not.toHaveBeenCalled();
-		expect(mockSqsClient.send).toHaveBeenCalledTimes(1);
-		expect(mockSqsClient.send.mock.calls[0][0]).toBeInstanceOf(DeleteMessageCommand);
+		expect(mockSqsClient.send).toHaveBeenCalledTimes(2);
+		expect(mockSqsClient.send.mock.calls[0][0]).toBeInstanceOf(SendMessageCommand);
+		expect(mockSqsClient.send.mock.calls[1][0]).toBeInstanceOf(DeleteMessageCommand);
 	});
 
 	it('should route directly to DLQ without retrying when use case throws deterministic domain error', async () => {

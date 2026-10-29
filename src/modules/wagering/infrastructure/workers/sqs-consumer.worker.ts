@@ -143,22 +143,6 @@ export class SqsConsumerWorker implements OnApplicationBootstrap, OnApplicationS
 			return false;
 		}
 
-		if (parsed) {
-			const isIntegrationEvent =
-				parsed.eventType === 'WagerTransactionProcessed' ||
-				parsed.eventType === 'WagerTransactionRejected' ||
-				parsed.eventType === 'WalletBalanceChanged' ||
-				parsed.eventType === 'WagerTransactionPendingReference';
-
-			if (isIntegrationEvent) {
-				this.logger.debug(`Acknowledging integration event ${parsed.eventType} from command queue`, {
-					messageId: message.MessageId
-				});
-				await this.deleteFromQueue(message.ReceiptHandle);
-				return true;
-			}
-		}
-
 		if (!parsed || parsed.type !== 'WagerTransactionRequested' || !parsed.data) {
 			this.logger.error(`Invalid message type or missing data in ${message.MessageId}`);
 			await this.sendToDlq(message);

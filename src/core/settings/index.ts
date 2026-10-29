@@ -33,7 +33,7 @@ export const settings = appSettingsSchema.parse({
 		queues: {
 			wagerTransactions: process.env.SQS_WAGER_QUEUE_URL,
 			wagerTransactionsDlq: process.env.SQS_WAGER_DLQ_URL,
-			wagerEvents: process.env.SQS_WAGER_EVENTS_QUEUE_URL ?? process.env.SQS_WAGER_QUEUE_URL
+			wagerEvents: process.env.SQS_WAGER_EVENTS_QUEUE_URL
 		}
 	}
 });
