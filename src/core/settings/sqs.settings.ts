@@ -9,7 +9,7 @@ export const sqsSchema = z.object({
 	queues: z.object({
 		wagerTransactions: z.url(),
 		wagerTransactionsDlq: z.url(),
-		wagerEvents: z.url().optional()
+		wagerEvents: z.url().default('http://localhost:4566/000000000000/wager-events.fifo')
 	})
 });
 

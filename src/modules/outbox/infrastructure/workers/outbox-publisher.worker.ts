@@ -75,6 +75,13 @@ export class OutboxPublisherWorker implements OnApplicationBootstrap, OnApplicat
 				await Promise.all(
 					pendingMessages.map(async message => {
 						try {
+							const payloadRecord = message.payload as Record<string, unknown> | null | undefined;
+							const dataRecord = payloadRecord?.data as Record<string, unknown> | null | undefined;
+							const walletId =
+								(typeof dataRecord?.walletId === 'string' && dataRecord.walletId) ||
+								(typeof payloadRecord?.walletId === 'string' && payloadRecord.walletId) ||
+								message.aggregateId;
+
 							await this.sqsClientService.client.send(
 								new SendMessageCommand({
 									QueueUrl: targetQueueUrl,
@@ -85,7 +92,7 @@ export class OutboxPublisherWorker implements OnApplicationBootstrap, OnApplicat
 										payload: message.payload,
 										occurredAt: message.occurredAt.toISOString()
 									}),
-									MessageGroupId: message.aggregateId,
+									MessageGroupId: walletId,
 									MessageDeduplicationId: message.id
 								})
 							);
