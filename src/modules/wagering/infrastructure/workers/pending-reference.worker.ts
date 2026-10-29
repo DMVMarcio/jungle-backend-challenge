@@ -21,6 +21,7 @@ export class PendingReferenceWorker implements OnApplicationBootstrap, OnApplica
 	private timer?: NodeJS.Timeout;
 	private isProcessing = false;
 	private isRunning = false;
+	private readonly backoffAttempts = new Map<string, { attempts: number; nextAttemptAt: number }>();
 
 	private readonly operations: Partial<Record<WagerTransactionKind, IWageringOperation>>;
 
@@ -116,9 +117,14 @@ export class PendingReferenceWorker implements OnApplicationBootstrap, OnApplica
 
 	private async resolvePendingTransaction(transaction: WagerTransaction, now: Date, ttlMs: number): Promise<boolean> {
 		return this.entityManager.transactional(async () => {
+			const backoff = this.backoffAttempts.get(transaction.id);
+			if (backoff && now.getTime() < backoff.nextAttemptAt) return false;
+
 			const currentTransaction = await this.wageringRepository.findById(transaction.id);
-			if (!currentTransaction || currentTransaction.status !== WagerTransactionStatus.PendingReference)
+			if (!currentTransaction || currentTransaction.status !== WagerTransactionStatus.PendingReference) {
+				this.backoffAttempts.delete(transaction.id);
 				return false;
+			}
 
 			const wallet = await this.walletRepository.findByIdWithLock(currentTransaction.walletId);
 			if (!wallet) {
@@ -126,6 +132,7 @@ export class PendingReferenceWorker implements OnApplicationBootstrap, OnApplica
 				await this.wageringRepository.update(currentTransaction);
 				await this.outboxService.enqueue(currentTransaction);
 				this.metricsService.recordTransaction(currentTransaction.status);
+				this.backoffAttempts.delete(transaction.id);
 				return true;
 			}
 
@@ -143,6 +150,7 @@ export class PendingReferenceWorker implements OnApplicationBootstrap, OnApplica
 					await this.wageringRepository.update(currentTransaction);
 					await this.outboxService.enqueue(currentTransaction, wallet);
 					this.metricsService.recordTransaction(currentTransaction.status);
+					this.backoffAttempts.delete(transaction.id);
 					return true;
 				}
 			}
@@ -154,8 +162,16 @@ export class PendingReferenceWorker implements OnApplicationBootstrap, OnApplica
 
 			if (currentTransaction.status === WagerTransactionStatus.PendingReference) {
 				this.metricsService.recordRetry('pending_reference');
+				const attempts = (backoff?.attempts ?? 0) + 1;
+				const delayMs = Math.min(1000 * Math.pow(2, attempts - 1), 60000);
+				this.backoffAttempts.set(transaction.id, {
+					attempts,
+					nextAttemptAt: now.getTime() + delayMs
+				});
 				return false;
 			}
+
+			this.backoffAttempts.delete(transaction.id);
 
 			if (ledgerEntry) {
 				await this.walletRepository.update(wallet);
