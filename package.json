@@ -7,6 +7,7 @@
 		"dev": "bun --watch src/main.ts",
 		"start": "bun src/main.ts",
 		"typecheck": "tsc --noEmit",
+		"format": "prettier --write \"**/*.{ts,js}\"",
 		"test": "bun test",
 		"test:load": "bun test/load/load-test.ts",
 		"migration:create": "bunx --bun mikro-orm migration:create",
