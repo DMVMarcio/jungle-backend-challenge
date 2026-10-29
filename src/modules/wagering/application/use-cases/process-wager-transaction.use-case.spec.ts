@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it } from 'bun:test';
 import { MetricsService } from '@/core/observability/services/metrics.service';
 import { InboxMemoryRepository } from '@/modules/inbox/infrastructure/database/inbox.memory.repository';
 import { OutboxMemoryRepository } from '@/modules/outbox/infrastructure/database/outbox.memory.repository';
-import { WagerTransactionKind, WagerTransactionStatus } from '@/modules/wagering/domain/wager-transaction';
+import { WagerTransaction, WagerTransactionKind, WagerTransactionStatus } from '@/modules/wagering/domain/wager-transaction';
 import { IdempotencyConflictError } from '@/modules/wagering/domain/wagering.errors';
 import { WagerTransactionMemoryRepository } from '@/modules/wagering/infrastructure/database/wager-transaction.memory.repository';
 import { Wallet } from '@/modules/wallet/domain/wallet';
@@ -555,5 +555,64 @@ describe('ProcessWagerTransactionUseCase', () => {
 				money: { amount: '10.00', currency: 'USD' }
 			})
 		).rejects.toBeInstanceOf(CurrencyMismatchError);
+	});
+
+	it('should mark WIN as PENDING_REFERENCE when reference transaction has not arrived yet', async () => {
+		const winResult = await sut.execute({
+			idempotencyKey: 'idemp-win-out-of-order',
+			providerId: 'provider-a',
+			externalTransactionId: 'transaction-win-out-of-order',
+			playerId: testPlayerId,
+			walletId: testWalletId,
+			roundId: 'round-ooo',
+			gameId: 'game-1',
+			kind: WagerTransactionKind.Win,
+			money: { amount: '75.00', currency: 'BRL' },
+			referenceExternalTransactionId: 'transaction-bet-ooo-missing'
+		});
+
+		expect(winResult.status).toBe(WagerTransactionStatus.PendingReference);
+		expect(winResult.balance).toEqual({ amount: '100.00', currency: 'BRL' });
+
+		const ledgerEntries = await ledgerRepository.findAllByWalletId(testWalletId);
+		expect(ledgerEntries).toHaveLength(0);
+
+		const savedTx = await wageringRepository.findById(winResult.transactionId);
+		expect(savedTx?.status).toBe(WagerTransactionStatus.PendingReference);
+	});
+
+	it('should return REJECTED with REFERENCE_ALREADY_REVERSED when concurrent reversal hits uq_wager_tx_single_reversal', async () => {
+		const originalCreate = wageringRepository.create.bind(wageringRepository);
+		let threw = false;
+		wageringRepository.create = async (tx: WagerTransaction) => {
+			if (!threw) {
+				threw = true;
+				const error = new Error('duplicate key value violates unique constraint uq_wager_tx_single_reversal') as Error & {
+					code: string;
+					constraint: string;
+				};
+				error.code = '23505';
+				error.constraint = 'uq_wager_tx_single_reversal';
+				throw error;
+			}
+			return originalCreate(tx);
+		};
+
+		const reversalResult = await sut.execute({
+			idempotencyKey: 'idemp-concurrent-refund',
+			providerId: 'provider-a',
+			externalTransactionId: 'transaction-concurrent-refund',
+			playerId: testPlayerId,
+			walletId: testWalletId,
+			roundId: 'round-1',
+			gameId: 'game-1',
+			kind: WagerTransactionKind.Refund,
+			money: { amount: '20.00', currency: 'BRL' },
+			referenceExternalTransactionId: 'some-reference'
+		});
+
+		expect(reversalResult.status).toBe(WagerTransactionStatus.Rejected);
+		expect(reversalResult.failureCode).toBe('REFERENCE_ALREADY_REVERSED');
+		expect(reversalResult.balance).toEqual({ amount: '100.00', currency: 'BRL' });
 	});
 });

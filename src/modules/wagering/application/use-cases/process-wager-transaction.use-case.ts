@@ -182,7 +182,10 @@ export class ProcessWagerTransactionUseCase {
 		} catch (error) {
 			this.entityManager.clear?.();
 
-			const databaseException = error as { code?: string; name?: string } | null | undefined;
+			const databaseException = error as
+				| { code?: string; name?: string; constraint?: string; detail?: string }
+				| null
+				| undefined;
 			const isUniqueViolation =
 				databaseException?.code === '23505' ||
 				databaseException?.name === 'UniqueConstraintViolationException';
@@ -205,6 +208,42 @@ export class ProcessWagerTransactionUseCase {
 						throw new IdempotencyConflictError(input.idempotencyKey);
 					}
 					return this.handleIdempotentReplay(concurrentByExternal, payloadHash, money, input.inboxMessage);
+				}
+
+				const isReversalConflict =
+					databaseException?.constraint === 'uq_wager_tx_single_reversal' ||
+					databaseException?.detail?.includes('reference_transaction_id') ||
+					(error as Error).message?.includes('uq_wager_tx_single_reversal');
+
+				if (isReversalConflict) {
+					const wallet = await this.walletRepository.findById(input.walletId);
+					const currentBalance = wallet ? wallet.balance : money;
+					const rejectedTx = this.createTransaction(input, money, payloadHash);
+					rejectedTx.reject('REFERENCE_ALREADY_REVERSED');
+					rejectedTx.recordBalanceAfter(currentBalance);
+
+					await this.wageringRepository.create(rejectedTx);
+					await this.outboxService.enqueue(rejectedTx, wallet ?? undefined);
+
+					if (input.inboxMessage && this.inboxRepository) {
+						const inbox = InboxMessage.receive({
+							messageId: input.inboxMessage.messageId,
+							consumerName: input.inboxMessage.consumerName,
+							payloadHash
+						});
+						inbox.markProcessed();
+						await this.inboxRepository.create(inbox);
+					}
+
+					this.metricsService.recordTransaction(rejectedTx.status);
+
+					return {
+						transactionId: rejectedTx.id,
+						status: rejectedTx.status,
+						failureCode: rejectedTx.failureCode,
+						balance: currentBalance.toJSON(),
+						idempotentReplay: false
+					};
 				}
 			}
 

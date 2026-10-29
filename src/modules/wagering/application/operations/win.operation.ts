@@ -26,7 +26,7 @@ export class WinOperation implements IWageringOperation {
 			);
 
 			if (!referenceTransaction) {
-				transaction.reject('REFERENCE_NOT_FOUND');
+				transaction.markPendingReference();
 				return undefined;
 			}
 
