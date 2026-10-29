@@ -16,6 +16,7 @@ export class OutboxMikroOrmRepository implements IOutboxRepository {
 			OutboxMessageSchema,
 			{
 				publishedAt: null,
+				attempts: { $lt: OutboxMessage.MAX_ATTEMPTS },
 				$or: [{ nextAttemptAt: null }, { nextAttemptAt: { $lte: now } }]
 			},
 			{

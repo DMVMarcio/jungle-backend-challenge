@@ -72,48 +72,67 @@ export class OutboxPublisherWorker implements OnApplicationBootstrap, OnApplicat
 				const targetQueueUrl = settings.sqs.queues.wagerEvents ?? settings.sqs.queues.wagerTransactions;
 				let publishedCount = 0;
 
+				const messagesByGroup = new Map<string, typeof pendingMessages>();
+				for (const message of pendingMessages) {
+					const payloadRecord = message.payload as Record<string, unknown> | null | undefined;
+					const dataRecord = payloadRecord?.data as Record<string, unknown> | null | undefined;
+					const groupId =
+						(typeof dataRecord?.walletId === 'string' && dataRecord.walletId) ||
+						(typeof payloadRecord?.walletId === 'string' && payloadRecord.walletId) ||
+						message.aggregateId;
+
+					const group = messagesByGroup.get(groupId);
+					if (group) {
+						group.push(message);
+					} else {
+						messagesByGroup.set(groupId, [message]);
+					}
+				}
+
 				await Promise.all(
-					pendingMessages.map(async message => {
-						try {
-							const payloadRecord = message.payload as Record<string, unknown> | null | undefined;
-							const dataRecord = payloadRecord?.data as Record<string, unknown> | null | undefined;
-							const walletId =
-								(typeof dataRecord?.walletId === 'string' && dataRecord.walletId) ||
-								(typeof payloadRecord?.walletId === 'string' && payloadRecord.walletId) ||
-								message.aggregateId;
+					Array.from(messagesByGroup.entries()).map(async ([groupId, groupMessages]) => {
+						for (const message of groupMessages) {
+							try {
+								await this.sqsClientService.client.send(
+									new SendMessageCommand({
+										QueueUrl: targetQueueUrl,
+										MessageBody: JSON.stringify({
+											id: message.id,
+											aggregateId: message.aggregateId,
+											eventType: message.eventType,
+											payload: message.payload,
+											occurredAt: message.occurredAt.toISOString()
+										}),
+										MessageGroupId: groupId,
+										MessageDeduplicationId: message.id
+									})
+								);
 
-							await this.sqsClientService.client.send(
-								new SendMessageCommand({
-									QueueUrl: targetQueueUrl,
-									MessageBody: JSON.stringify({
-										id: message.id,
-										aggregateId: message.aggregateId,
-										eventType: message.eventType,
-										payload: message.payload,
-										occurredAt: message.occurredAt.toISOString()
-									}),
-									MessageGroupId: walletId,
-									MessageDeduplicationId: message.id
-								})
-							);
-
-							message.markPublished();
-							publishedCount++;
-							this.logger.log(`Outbox message published`, {
-								messageId: message.id,
-								transactionId: message.aggregateId
-							});
-						} catch (error) {
-							this.logger.error(
-								`Failed to publish message ${message.id}: ${(error as Error).message}`,
-								(error as Error).stack,
-								{
+								message.markPublished();
+								publishedCount++;
+								this.logger.log(`Outbox message published`, {
 									messageId: message.id,
 									transactionId: message.aggregateId
+								});
+							} catch (error) {
+								this.logger.error(
+									`Failed to publish message ${message.id}: ${(error as Error).message}`,
+									(error as Error).stack,
+									{
+										messageId: message.id,
+										transactionId: message.aggregateId
+									}
+								);
+								this.metricsService.recordRetry('outbox');
+								message.scheduleRetry();
+								if (message.hasExceededMaxAttempts()) {
+									this.metricsService.recordDlq();
+									this.logger.error(
+										`Outbox message ${message.id} reached max retry attempts and will not be retried`
+									);
 								}
-							);
-							this.metricsService.recordRetry('outbox');
-							message.scheduleRetry();
+								break;
+							}
 						}
 					})
 				);

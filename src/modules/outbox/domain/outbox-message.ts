@@ -24,6 +24,8 @@ export interface OutboxMessageState {
 }
 
 export class OutboxMessage {
+	static readonly MAX_ATTEMPTS = 10;
+
 	private constructor(
 		public readonly id: string,
 		public readonly aggregateId: string,
@@ -84,12 +86,17 @@ export class OutboxMessage {
 		return this._publishedAt;
 	}
 
+	hasExceededMaxAttempts(): boolean {
+		return this._attempts >= OutboxMessage.MAX_ATTEMPTS;
+	}
+
 	isPending(): boolean {
 		return this._publishedAt === undefined;
 	}
 
 	isDue(now: Date = new Date()): boolean {
 		if (!this.isPending()) return false;
+		if (this.hasExceededMaxAttempts()) return false;
 		if (!this._nextAttemptAt) return true;
 
 		return this._nextAttemptAt <= now;
@@ -101,6 +108,11 @@ export class OutboxMessage {
 
 	scheduleRetry(now: Date = new Date()): void {
 		this._attempts += 1;
+
+		if (this.hasExceededMaxAttempts()) {
+			this._nextAttemptAt = undefined;
+			return;
+		}
 
 		const delaySeconds = Math.min(300, Math.pow(2, this._attempts));
 		this._nextAttemptAt = new Date(now.getTime() + delaySeconds * 1000);
