@@ -22,6 +22,11 @@ export class WagerTransactionMapper {
 			referenceTransactionId: record.referenceTransactionId,
 			status: record.status,
 			failureCode: record.failureCode,
+			balanceAfter: record.balanceAfter
+				? Money.from({ amount: record.balanceAfter, currency: record.currency })
+				: undefined,
+			attempts: record.attempts,
+			nextAttemptAt: record.nextAttemptAt,
 			createdAt: record.createdAt,
 			processedAt: record.processedAt
 		});
@@ -45,6 +50,9 @@ export class WagerTransactionMapper {
 			referenceTransactionId: domain.referenceTransactionId,
 			status: domain.status,
 			failureCode: domain.failureCode,
+			balanceAfter: domain.balanceAfter ? domain.balanceAfter.toJSON().amount : undefined,
+			attempts: domain.attempts,
+			nextAttemptAt: domain.nextAttemptAt,
 			createdAt: domain.createdAt,
 			processedAt: domain.processedAt
 		};

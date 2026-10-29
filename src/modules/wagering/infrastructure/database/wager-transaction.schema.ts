@@ -21,6 +21,9 @@ export interface WagerTransactionDbRecord {
 	referenceTransactionId?: string;
 	status: WagerTransactionStatus;
 	failureCode?: FailureCode;
+	balanceAfter?: string;
+	attempts: number;
+	nextAttemptAt?: Date;
 	createdAt: Date;
 	processedAt?: Date;
 }
@@ -45,6 +48,9 @@ export const WagerTransactionSchema = new EntitySchema<WagerTransactionDbRecord>
 		referenceTransactionId: { type: 'uuid', nullable: true },
 		status: { enum: true, items: () => WagerTransactionStatus, index: true },
 		failureCode: { type: 'varchar(50)', nullable: true },
+		balanceAfter: { type: 'numeric(18, 2)', nullable: true },
+		attempts: { type: 'integer', default: 0 },
+		nextAttemptAt: { type: 'Date', nullable: true },
 		createdAt: { type: 'Date', defaultRaw: 'CURRENT_TIMESTAMP' },
 		processedAt: { type: 'Date', nullable: true }
 	},

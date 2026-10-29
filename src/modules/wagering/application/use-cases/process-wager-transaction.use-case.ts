@@ -147,6 +147,7 @@ export class ProcessWagerTransactionUseCase {
 					await this.ledgerRepository.create(ledgerEntry);
 				}
 
+				transaction.recordBalanceAfter(wallet.balance);
 				await this.wageringRepository.create(transaction);
 				await this.outboxService.enqueue(transaction, wallet, ledgerEntry);
 
@@ -259,6 +260,8 @@ export class ProcessWagerTransactionUseCase {
 
 		if (ledgerEntry) {
 			replayBalance = ledgerEntry.balanceAfter.toJSON();
+		} else if (existingTransaction.balanceAfter) {
+			replayBalance = existingTransaction.balanceAfter.toJSON();
 		} else {
 			const wallet = await this.walletRepository.findById(existingTransaction.walletId);
 			replayBalance = wallet ? wallet.balance.toJSON() : fallbackMoney.toJSON();

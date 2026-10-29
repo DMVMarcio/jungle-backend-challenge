@@ -33,7 +33,9 @@ export type FailureCode =
 	| 'AMOUNT_MISMATCH'
 	| 'NEGATIVE_BALANCE_PREVENTED'
 	| 'IDEMPOTENCY_CONFLICT'
-	| 'CURRENCY_MISMATCH';
+	| 'CURRENCY_MISMATCH'
+	| 'REFERENCE_CONTEXT_MISMATCH'
+	| 'INVALID_REFERENCE_STATE';
 
 export interface CreateWagerTransactionProps {
 	id?: string;
@@ -48,6 +50,7 @@ export interface CreateWagerTransactionProps {
 	kind: WagerTransactionKind;
 	money: Money;
 	referenceExternalTransactionId?: string;
+	balanceAfter?: Money;
 	createdAt?: Date;
 }
 
@@ -67,6 +70,9 @@ export interface WagerTransactionState {
 	referenceTransactionId?: string;
 	status: WagerTransactionStatus;
 	failureCode?: FailureCode;
+	balanceAfter?: Money;
+	attempts?: number;
+	nextAttemptAt?: Date;
 	createdAt: Date;
 	processedAt?: Date;
 }
@@ -101,7 +107,10 @@ export class WagerTransaction {
 		private _status: WagerTransactionStatus,
 		private _referenceTransactionId?: string,
 		private _failureCode?: FailureCode,
-		private _processedAt?: Date
+		private _processedAt?: Date,
+		private _balanceAfter?: Money,
+		private _attempts: number = 0,
+		private _nextAttemptAt?: Date
 	) {}
 
 	static create(props: CreateWagerTransactionProps): WagerTransaction {
@@ -124,7 +133,13 @@ export class WagerTransaction {
 			props.money,
 			props.referenceExternalTransactionId?.trim(),
 			props.createdAt ?? new Date(),
-			WagerTransactionStatus.Pending
+			WagerTransactionStatus.Pending,
+			undefined,
+			undefined,
+			undefined,
+			props.balanceAfter,
+			0,
+			undefined
 		);
 	}
 
@@ -146,7 +161,10 @@ export class WagerTransaction {
 			state.status,
 			state.referenceTransactionId,
 			state.failureCode,
-			state.processedAt
+			state.processedAt,
+			state.balanceAfter,
+			state.attempts ?? 0,
+			state.nextAttemptAt
 		);
 	}
 
@@ -164,6 +182,32 @@ export class WagerTransaction {
 
 	get processedAt(): Date | undefined {
 		return this._processedAt;
+	}
+
+	get balanceAfter(): Money | undefined {
+		return this._balanceAfter;
+	}
+
+	get attempts(): number {
+		return this._attempts;
+	}
+
+	get nextAttemptAt(): Date | undefined {
+		return this._nextAttemptAt;
+	}
+
+	recordBalanceAfter(balance: Money): void {
+		this._balanceAfter = balance;
+	}
+
+	recordAttempt(nextAttemptAt?: Date): void {
+		this._attempts += 1;
+		this._nextAttemptAt = nextAttemptAt;
+	}
+
+	resetAttempts(): void {
+		this._attempts = 0;
+		this._nextAttemptAt = undefined;
 	}
 
 	markProcessed(referenceTransactionId?: string, at: Date = new Date()): void {
@@ -220,9 +264,9 @@ export class WagerTransaction {
 			reference.roundId !== this.roundId ||
 			reference.money.currency !== this.money.currency
 		)
-			return 'REFERENCE_NOT_FOUND';
+			return 'REFERENCE_CONTEXT_MISMATCH';
 
-		if (reference.status !== WagerTransactionStatus.Processed) return 'REFERENCE_NOT_FOUND';
+		if (reference.status !== WagerTransactionStatus.Processed) return 'INVALID_REFERENCE_STATE';
 
 		if (
 			(this.kind === WagerTransactionKind.Refund || this.kind === WagerTransactionKind.Win) &&

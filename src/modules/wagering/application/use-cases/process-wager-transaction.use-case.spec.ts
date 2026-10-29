@@ -219,7 +219,7 @@ describe('ProcessWagerTransactionUseCase', () => {
 		});
 
 		expect(invalidWinResult.status).toBe(WagerTransactionStatus.Rejected);
-		expect(invalidWinResult.failureCode).toBe('REFERENCE_NOT_FOUND');
+		expect(invalidWinResult.failureCode).toBe('REFERENCE_CONTEXT_MISMATCH');
 	});
 
 	it('should process a LOSS without changing balance or ledger', async () => {
@@ -269,6 +269,40 @@ describe('ProcessWagerTransactionUseCase', () => {
 
 		const ledgerEntries = await ledgerRepository.findAllByWalletId(testWalletId);
 		expect(ledgerEntries).toHaveLength(1);
+	});
+
+	it('should replay LOSS with historical balance even after subsequent balance changes', async () => {
+		const lossInput = {
+			idempotencyKey: 'idemp-loss-historical',
+			providerId: 'provider-a',
+			externalTransactionId: 'transaction-loss-historical',
+			playerId: testPlayerId,
+			walletId: testWalletId,
+			roundId: 'round-1',
+			gameId: 'game-1',
+			kind: WagerTransactionKind.Loss,
+			money: { amount: '10.00', currency: 'BRL' }
+		};
+
+		const lossResult = await sut.execute(lossInput);
+		expect(lossResult.status).toBe(WagerTransactionStatus.Processed);
+		expect(lossResult.balance).toEqual({ amount: '100.00', currency: 'BRL' });
+
+		await sut.execute({
+			idempotencyKey: 'idemp-subsequent-bet',
+			providerId: 'provider-a',
+			externalTransactionId: 'transaction-subsequent-bet',
+			playerId: testPlayerId,
+			walletId: testWalletId,
+			roundId: 'round-2',
+			gameId: 'game-1',
+			kind: WagerTransactionKind.Bet,
+			money: { amount: '30.00', currency: 'BRL' }
+		});
+
+		const replayLossResult = await sut.execute(lossInput);
+		expect(replayLossResult.idempotentReplay).toBe(true);
+		expect(replayLossResult.balance).toEqual({ amount: '100.00', currency: 'BRL' });
 	});
 
 	it('should throw IdempotencyConflictError when same key is sent with different payload', async () => {

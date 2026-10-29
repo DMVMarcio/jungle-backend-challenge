@@ -205,4 +205,133 @@ describe('WagerTransaction', () => {
 			expect(() => rollbackTransaction.ledgerDirectionFor()).toThrow(MissingReferenceTransactionError);
 		});
 	});
+
+	describe('Reference Validation', () => {
+		const validBet = WagerTransaction.create({
+			...baseProps,
+			kind: WagerTransactionKind.Bet
+		});
+		validBet.markProcessed();
+
+		it('should return REFERENCE_CONTEXT_MISMATCH when context fields differ', () => {
+			const refundWrongRound = WagerTransaction.create({
+				...baseProps,
+				roundId: 'other-round',
+				kind: WagerTransactionKind.Refund,
+				referenceExternalTransactionId: validBet.externalTransactionId
+			});
+
+			expect(refundWrongRound.validateReference(validBet)).toBe('REFERENCE_CONTEXT_MISMATCH');
+
+			const refundWrongPlayer = WagerTransaction.create({
+				...baseProps,
+				playerId: 'other-player',
+				kind: WagerTransactionKind.Refund,
+				referenceExternalTransactionId: validBet.externalTransactionId
+			});
+
+			expect(refundWrongPlayer.validateReference(validBet)).toBe('REFERENCE_CONTEXT_MISMATCH');
+
+			const refundWrongCurrency = WagerTransaction.create({
+				...baseProps,
+				money: Money.from({ amount: '25.00', currency: 'USD' }),
+				kind: WagerTransactionKind.Refund,
+				referenceExternalTransactionId: validBet.externalTransactionId
+			});
+
+			expect(refundWrongCurrency.validateReference(validBet)).toBe('REFERENCE_CONTEXT_MISMATCH');
+		});
+
+		it('should return INVALID_REFERENCE_STATE when reference is not PROCESSED', () => {
+			const pendingBet = WagerTransaction.create({
+				...baseProps,
+				kind: WagerTransactionKind.Bet
+			});
+
+			const refund = WagerTransaction.create({
+				...baseProps,
+				kind: WagerTransactionKind.Refund,
+				referenceExternalTransactionId: pendingBet.externalTransactionId
+			});
+
+			expect(refund.validateReference(pendingBet)).toBe('INVALID_REFERENCE_STATE');
+		});
+
+		it('should return INVALID_REFERENCE_KIND when refund references non-bet transaction', () => {
+			const winTx = WagerTransaction.create({
+				...baseProps,
+				kind: WagerTransactionKind.Win
+			});
+			winTx.markProcessed();
+
+			const refund = WagerTransaction.create({
+				...baseProps,
+				kind: WagerTransactionKind.Refund,
+				referenceExternalTransactionId: winTx.externalTransactionId
+			});
+
+			expect(refund.validateReference(winTx)).toBe('INVALID_REFERENCE_KIND');
+		});
+
+		it('should return AMOUNT_MISMATCH when amounts differ for refund', () => {
+			const refund = WagerTransaction.create({
+				...baseProps,
+				money: Money.from({ amount: '10.00', currency: 'BRL' }),
+				kind: WagerTransactionKind.Refund,
+				referenceExternalTransactionId: validBet.externalTransactionId
+			});
+
+			expect(refund.validateReference(validBet)).toBe('AMOUNT_MISMATCH');
+		});
+
+		it('should return null when reference is valid and matches all invariants', () => {
+			const refund = WagerTransaction.create({
+				...baseProps,
+				kind: WagerTransactionKind.Refund,
+				referenceExternalTransactionId: validBet.externalTransactionId
+			});
+
+			expect(refund.validateReference(validBet)).toBeNull();
+		});
+	});
+
+	describe('Balance & Attempt Tracking', () => {
+		it('should record and retrieve balanceAfter', () => {
+			const tx = WagerTransaction.create({
+				...baseProps,
+				kind: WagerTransactionKind.Bet
+			});
+
+			expect(tx.balanceAfter).toBeUndefined();
+
+			const balance = Money.from({ amount: '75.00', currency: 'BRL' });
+			tx.recordBalanceAfter(balance);
+
+			expect(tx.balanceAfter?.equals(balance)).toBe(true);
+		});
+
+		it('should track attempts and nextAttemptAt, and allow resetting attempts', () => {
+			const tx = WagerTransaction.create({
+				...baseProps,
+				kind: WagerTransactionKind.Refund,
+				referenceExternalTransactionId: 'ref-1'
+			});
+
+			expect(tx.attempts).toBe(0);
+			expect(tx.nextAttemptAt).toBeUndefined();
+
+			const next = new Date(Date.now() + 5000);
+			tx.recordAttempt(next);
+
+			expect(tx.attempts).toBe(1);
+			expect(tx.nextAttemptAt).toEqual(next);
+
+			tx.recordAttempt(new Date(Date.now() + 10000));
+			expect(tx.attempts).toBe(2);
+
+			tx.resetAttempts();
+			expect(tx.attempts).toBe(0);
+			expect(tx.nextAttemptAt).toBeUndefined();
+		});
+	});
 });
