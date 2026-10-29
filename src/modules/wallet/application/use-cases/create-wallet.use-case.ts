@@ -1,5 +1,5 @@
 import { EntityManager } from '@mikro-orm/postgresql';
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
 
 import { RequestContextService } from '@/core/observability/services/request-context.service';
 import { OutboxMessage } from '@/modules/outbox/domain/outbox-message';
@@ -8,6 +8,7 @@ import { OUTBOX_TOKENS } from '@/modules/outbox/outbox.tokens';
 import { WagerTransactionProcessed } from '@/modules/wagering/domain/events/wager-transaction-processed.event';
 import { WagerTransaction, WagerTransactionKind } from '@/modules/wagering/domain/wager-transaction';
 import type { IWagerTransactionRepository } from '@/modules/wagering/domain/wager-transaction.repository.interface';
+import { WageringOutboxService } from '@/modules/wagering/application/services/wagering-outbox.service';
 import { WAGERING_TOKENS } from '@/modules/wagering/wagering.tokens';
 import { WalletBalanceChanged } from '@/modules/wallet/domain/events/wallet-balance-changed.event';
 import { Wallet } from '@/modules/wallet/domain/wallet';
@@ -54,7 +55,9 @@ export class CreateWalletUseCase {
 		private readonly idGenerator: IIdGenerator,
 
 		private readonly requestContextService: RequestContextService,
-		private readonly entityManager: EntityManager
+		private readonly entityManager: EntityManager,
+		@Optional()
+		private readonly outboxService?: WageringOutboxService
 	) {}
 
 	async execute(input: CreateWalletUseCaseInput): Promise<CreateWalletUseCaseOutput> {
@@ -104,40 +107,46 @@ export class CreateWalletUseCase {
 				});
 
 				openingTransaction.markProcessed(undefined, wallet.createdAt);
-
-				const correlationId = this.requestContextService.getCorrelationId() ?? openingTransactionId;
-
-				const transactionProcessedEvent = new WagerTransactionProcessed({
-					eventId: this.idGenerator.generate(),
-					aggregateId: openingTransactionId,
-					correlationId,
-					causationId: openingTransactionId,
-					occurredAt: wallet.createdAt,
-					data: {
-						transactionId: openingTransaction.id,
-						providerId: openingTransaction.providerId,
-						externalTransactionId: openingTransaction.externalTransactionId,
-						playerId: openingTransaction.playerId,
-						walletId: openingTransaction.walletId,
-						roundId: openingTransaction.roundId,
-						gameId: openingTransaction.gameId,
-						kind: openingTransaction.kind,
-						money: openingTransaction.money.toJSON()
-					}
-				});
-
-				const balanceChangedEvent = WalletBalanceChanged.from(wallet, ledgerEntry, {
-					eventId: this.idGenerator.generate(),
-					correlationId,
-					causationId: openingTransactionId
-				});
+				openingTransaction.recordBalanceAfter(wallet.balance);
 
 				await this.entityManager.transactional(async () => {
 					await this.walletRepository.create(wallet);
 					await this.ledgerRepository.create(ledgerEntry);
 					await this.wageringRepository.create(openingTransaction);
-					await this.outboxRepository.create(OutboxMessage.enqueue(transactionProcessedEvent));
-					await this.outboxRepository.create(OutboxMessage.enqueue(balanceChangedEvent));
+
+					if (this.outboxService) {
+						await this.outboxService.enqueue(openingTransaction, wallet, ledgerEntry);
+					} else {
+						const correlationId = this.requestContextService.getCorrelationId() ?? openingTransactionId;
+
+						const transactionProcessedEvent = new WagerTransactionProcessed({
+							eventId: this.idGenerator.generate(),
+							aggregateId: openingTransactionId,
+							correlationId,
+							causationId: openingTransactionId,
+							occurredAt: wallet.createdAt,
+							data: {
+								transactionId: openingTransaction.id,
+								providerId: openingTransaction.providerId,
+								externalTransactionId: openingTransaction.externalTransactionId,
+								playerId: openingTransaction.playerId,
+								walletId: openingTransaction.walletId,
+								roundId: openingTransaction.roundId,
+								gameId: openingTransaction.gameId,
+								kind: openingTransaction.kind,
+								money: openingTransaction.money.toJSON()
+							}
+						});
+
+						const balanceChangedEvent = WalletBalanceChanged.from(wallet, ledgerEntry, {
+							eventId: this.idGenerator.generate(),
+							correlationId,
+							causationId: openingTransactionId
+						});
+
+						await this.outboxRepository.create(OutboxMessage.enqueue(transactionProcessedEvent));
+						await this.outboxRepository.create(OutboxMessage.enqueue(balanceChangedEvent));
+					}
 				});
 			} else {
 				await this.walletRepository.create(wallet);

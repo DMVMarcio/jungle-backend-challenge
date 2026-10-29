@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it } from 'bun:test';
 
 import { RequestContextService } from '@/core/observability/services/request-context.service';
 import { OutboxMemoryRepository } from '@/modules/outbox/infrastructure/database/outbox.memory.repository';
+import { WageringOutboxService } from '@/modules/wagering/application/services/wagering-outbox.service';
 import { WagerTransactionKind, WagerTransactionStatus } from '@/modules/wagering/domain/wager-transaction';
 import { WagerTransactionMemoryRepository } from '@/modules/wagering/infrastructure/database/wager-transaction.memory.repository';
 import { IdGeneratorUuidAdapter } from '@/shared/adapters/id-generator/id-generator.uuid.adapter';
@@ -38,6 +39,8 @@ describe('Create Wallet UseCase', () => {
 			transactional: async <T>(cb: (em: EntityManager) => Promise<T>): Promise<T> => cb(entityManager)
 		} as unknown as EntityManager;
 
+		const outboxService = new WageringOutboxService(outboxRepository, idGenerator, requestContextService);
+
 		sut = new CreateWalletUseCase(
 			walletRepository,
 			ledgerRepository,
@@ -45,7 +48,8 @@ describe('Create Wallet UseCase', () => {
 			outboxRepository,
 			idGenerator,
 			requestContextService,
-			entityManager
+			entityManager,
+			outboxService
 		);
 	});
 

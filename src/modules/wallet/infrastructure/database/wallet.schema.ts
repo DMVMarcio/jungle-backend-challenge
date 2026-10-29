@@ -23,7 +23,7 @@ export const WalletSchema = new EntitySchema<WalletDbRecord>({
 			check: 'balance_amount >= 0'
 		},
 		currency: { type: 'varchar(3)' },
-		version: { type: 'integer', version: true },
+		version: { type: 'integer', default: 1 },
 		createdAt: { type: 'Date', defaultRaw: 'CURRENT_TIMESTAMP' },
 		updatedAt: { type: 'Date', defaultRaw: 'CURRENT_TIMESTAMP' }
 	},

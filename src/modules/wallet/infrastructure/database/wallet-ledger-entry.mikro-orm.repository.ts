@@ -25,10 +25,12 @@ export class WalletLedgerEntryMikroOrmRepository implements IWalletLedgerEntryRe
 				const decoded = JSON.parse(Buffer.from(input.cursor, 'base64url').toString('utf8'));
 				const cursorDate = new Date(decoded.createdAt);
 
-				whereClause.$or = [
-					{ createdAt: { $lt: cursorDate } },
-					{ createdAt: cursorDate, id: { $lt: decoded.id } }
-				];
+				if (!isNaN(cursorDate.getTime()) && typeof decoded.id === 'string' && decoded.id.length > 0) {
+					whereClause.$or = [
+						{ createdAt: { $lt: cursorDate } },
+						{ createdAt: cursorDate, id: { $lt: decoded.id } }
+					];
+				}
 			} catch {}
 		}
 

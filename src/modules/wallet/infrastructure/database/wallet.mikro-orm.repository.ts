@@ -43,7 +43,7 @@ export class WalletMikroOrmRepository implements IWalletRepository {
 		const record = await this.entityManager.findOne(WalletSchema, { id: wallet.id });
 		if (!record) return;
 
-		const { id, version, createdAt, ...updatableData } = WalletMapper.toPersistence(wallet);
+		const { id, createdAt, ...updatableData } = WalletMapper.toPersistence(wallet);
 		this.entityManager.assign(record, updatableData);
 
 		await this.entityManager.flush();
