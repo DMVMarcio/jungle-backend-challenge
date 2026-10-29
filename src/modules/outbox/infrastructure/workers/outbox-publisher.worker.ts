@@ -65,6 +65,8 @@ export class OutboxPublisherWorker implements OnApplicationBootstrap, OnApplicat
 			const lag = await this.outboxRepository.countPending();
 			this.metricsService.setOutboxLag(lag);
 
+			if (lag === 0) return 0;
+
 			return await this.entityManager.transactional(async () => {
 				const pendingMessages = await this.outboxRepository.findPendingDue(batchSize);
 				if (pendingMessages.length === 0) return 0;

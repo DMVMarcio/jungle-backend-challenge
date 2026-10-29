@@ -19,5 +19,5 @@ export default defineConfig({
 		max: settings.database.poolMax
 	},
 	allowGlobalContext: true,
-	debug: settings.nodeEnv === 'development'
+	debug: process.env.DATABASE_DEBUG === 'true'
 });
