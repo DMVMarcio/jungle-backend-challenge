@@ -56,14 +56,16 @@ export class WagerTransactionMikroOrmRepository implements IWagerTransactionRepo
 		return WagerTransactionMapper.toDomain(record);
 	}
 
-	async findPendingReferences(limit = 50): Promise<WagerTransaction[]> {
+	async findPendingReferences(limit = 50, now: Date = new Date()): Promise<WagerTransaction[]> {
 		const records = await this.entityManager.find(
 			WagerTransactionSchema,
-			{ status: WagerTransactionStatus.PendingReference },
+			{
+				status: WagerTransactionStatus.PendingReference,
+				$or: [{ nextAttemptAt: null }, { nextAttemptAt: { $lte: now } }]
+			},
 			{
 				limit,
-				orderBy: { createdAt: 'ASC' },
-				lockMode: LockMode.PESSIMISTIC_PARTIAL_WRITE
+				orderBy: { createdAt: 'ASC' }
 			}
 		);
 

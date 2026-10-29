@@ -8,7 +8,7 @@ export interface IWagerTransactionRepository {
 		referenceTransactionId: string,
 		kind?: WagerTransactionKind
 	): Promise<WagerTransaction | null>;
-	findPendingReferences(limit?: number): Promise<WagerTransaction[]>;
+	findPendingReferences(limit?: number, now?: Date): Promise<WagerTransaction[]>;
 
 	create(transaction: WagerTransaction): Promise<void>;
 	update(transaction: WagerTransaction): Promise<void>;

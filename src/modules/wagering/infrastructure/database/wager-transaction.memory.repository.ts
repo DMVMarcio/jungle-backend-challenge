@@ -46,8 +46,14 @@ export class WagerTransactionMemoryRepository implements IWagerTransactionReposi
 		);
 	}
 
-	async findPendingReferences(limit = 50): Promise<WagerTransaction[]> {
-		return this.items.filter(item => item.status === WagerTransactionStatus.PendingReference).slice(0, limit);
+	async findPendingReferences(limit = 50, now: Date = new Date()): Promise<WagerTransaction[]> {
+		return this.items
+			.filter(
+				item =>
+					item.status === WagerTransactionStatus.PendingReference &&
+					(!item.nextAttemptAt || item.nextAttemptAt.getTime() <= now.getTime())
+			)
+			.slice(0, limit);
 	}
 
 	async create(transaction: WagerTransaction): Promise<void> {

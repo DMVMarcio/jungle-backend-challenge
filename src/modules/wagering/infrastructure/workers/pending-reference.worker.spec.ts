@@ -19,6 +19,7 @@ import { Money } from '@/shared/domain/money/money';
 
 import { RefundOperation } from '../../application/operations/refund.operation';
 import { RollbackOperation } from '../../application/operations/rollback.operation';
+import { WinOperation } from '../../application/operations/win.operation';
 import { WageringOutboxService } from '../../application/services/wagering-outbox.service';
 import { PendingReferenceWorker } from './pending-reference.worker';
 
@@ -48,6 +49,7 @@ describe('Pending Reference Worker', () => {
 		const outboxService = new WageringOutboxService(outboxRepository, idGenerator);
 		const refundOperation = new RefundOperation(wageringRepository);
 		const rollbackOperation = new RollbackOperation(wageringRepository);
+		const winOperation = new WinOperation(wageringRepository);
 		const metricsService = new MetricsService();
 
 		sut = new PendingReferenceWorker(
@@ -57,6 +59,7 @@ describe('Pending Reference Worker', () => {
 			outboxService,
 			refundOperation,
 			rollbackOperation,
+			winOperation,
 			entityManager,
 			metricsService
 		);
@@ -253,6 +256,103 @@ describe('Pending Reference Worker', () => {
 
 		const resolvedCount = await sut.processPendingReferences(50, new Date());
 
+		expect(resolvedCount).toBe(0);
+	});
+
+	it('should resolve a pending WIN when reference BET is found in database', async () => {
+		const betTransaction = WagerTransaction.create({
+			id: 'transaction-bet-for-win',
+			providerId: 'provider-a',
+			externalTransactionId: 'external-bet-for-win',
+			idempotencyKey: 'key-bet-win',
+			payloadHash: 'hash-bet-win',
+			walletId: testWalletId,
+			playerId: testPlayerId,
+			roundId: 'round-win',
+			gameId: 'game-1',
+			kind: WagerTransactionKind.Bet,
+			money: Money.from({ amount: '50.00', currency: 'BRL' })
+		});
+		betTransaction.markProcessed();
+		await wageringRepository.create(betTransaction);
+
+		const winTransaction = WagerTransaction.create({
+			id: 'transaction-win-pending',
+			providerId: 'provider-a',
+			externalTransactionId: 'external-win-pending',
+			idempotencyKey: 'key-win-pending',
+			payloadHash: 'hash-win-pending',
+			walletId: testWalletId,
+			playerId: testPlayerId,
+			roundId: 'round-win',
+			gameId: 'game-1',
+			kind: WagerTransactionKind.Win,
+			money: Money.from({ amount: '120.00', currency: 'BRL' }),
+			referenceExternalTransactionId: 'external-bet-for-win'
+		});
+		winTransaction.markPendingReference();
+		await wageringRepository.create(winTransaction);
+
+		const resolvedCount = await sut.processPendingReferences(50, new Date());
+		expect(resolvedCount).toBe(1);
+
+		const updatedWin = await wageringRepository.findById('transaction-win-pending');
+		expect(updatedWin?.status).toBe(WagerTransactionStatus.Processed);
+		expect(updatedWin?.referenceTransactionId).toBe('transaction-bet-for-win');
+
+		const wallet = await walletRepository.findById(testWalletId);
+		expect(wallet?.balance.toJSON()).toEqual({ amount: '220.00', currency: 'BRL' });
+	});
+
+	it('should track attempts and exponential backoff nextAttemptAt when reference is missing', async () => {
+		const refundTransaction = WagerTransaction.create({
+			id: 'transaction-backoff-test',
+			providerId: 'provider-a',
+			externalTransactionId: 'external-backoff-test',
+			idempotencyKey: 'key-backoff-test',
+			payloadHash: 'hash-backoff',
+			walletId: testWalletId,
+			playerId: testPlayerId,
+			roundId: 'round-1',
+			gameId: 'game-1',
+			kind: WagerTransactionKind.Refund,
+			money: Money.from({ amount: '15.00', currency: 'BRL' }),
+			referenceExternalTransactionId: 'external-not-here',
+			createdAt: new Date('2026-10-28T12:00:00Z')
+		});
+		refundTransaction.markPendingReference();
+		await wageringRepository.create(refundTransaction);
+
+		const now = new Date('2026-10-28T12:01:00Z');
+		await sut.processPendingReferences(50, now);
+
+		const updatedTx = await wageringRepository.findById('transaction-backoff-test');
+		expect(updatedTx?.attempts).toBe(1);
+		expect(updatedTx?.nextAttemptAt).toBeDefined();
+		expect(updatedTx?.nextAttemptAt?.getTime()).toBe(now.getTime() + 1000);
+	});
+
+	it('should skip transactions whose nextAttemptAt is in the future', async () => {
+		const refundTransaction = WagerTransaction.create({
+			id: 'transaction-future-test',
+			providerId: 'provider-a',
+			externalTransactionId: 'external-future-test',
+			idempotencyKey: 'key-future-test',
+			payloadHash: 'hash-future',
+			walletId: testWalletId,
+			playerId: testPlayerId,
+			roundId: 'round-1',
+			gameId: 'game-1',
+			kind: WagerTransactionKind.Refund,
+			money: Money.from({ amount: '15.00', currency: 'BRL' }),
+			referenceExternalTransactionId: 'external-future-ref',
+			createdAt: new Date('2026-10-28T12:00:00Z')
+		});
+		refundTransaction.markPendingReference();
+		refundTransaction.recordAttempt(new Date('2026-10-28T12:05:00Z'));
+		await wageringRepository.create(refundTransaction);
+
+		const resolvedCount = await sut.processPendingReferences(50, new Date('2026-10-28T12:01:00Z'));
 		expect(resolvedCount).toBe(0);
 	});
 });

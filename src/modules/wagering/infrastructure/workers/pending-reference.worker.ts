@@ -10,8 +10,9 @@ import { WALLET_TOKENS } from '@/modules/wallet/wallet.tokens';
 import { RefundOperation } from '../../application/operations/refund.operation';
 import { RollbackOperation } from '../../application/operations/rollback.operation';
 import type { IWageringOperation } from '../../application/operations/wagering-operation.interface';
+import { WinOperation } from '../../application/operations/win.operation';
 import { WageringOutboxService } from '../../application/services/wagering-outbox.service';
-import { WagerTransaction, WagerTransactionKind, WagerTransactionStatus } from '../../domain/wager-transaction';
+import { WagerTransactionKind, WagerTransactionStatus } from '../../domain/wager-transaction';
 import type { IWagerTransactionRepository } from '../../domain/wager-transaction.repository.interface';
 import { WAGERING_TOKENS } from '../../wagering.tokens';
 
@@ -21,7 +22,6 @@ export class PendingReferenceWorker implements OnApplicationBootstrap, OnApplica
 	private timer?: NodeJS.Timeout;
 	private isProcessing = false;
 	private isRunning = false;
-	private readonly backoffAttempts = new Map<string, { attempts: number; nextAttemptAt: number }>();
 
 	private readonly operations: Partial<Record<WagerTransactionKind, IWageringOperation>>;
 
@@ -38,12 +38,14 @@ export class PendingReferenceWorker implements OnApplicationBootstrap, OnApplica
 		private readonly outboxService: WageringOutboxService,
 		private readonly refundOperation: RefundOperation,
 		private readonly rollbackOperation: RollbackOperation,
+		private readonly winOperation: WinOperation,
 		private readonly entityManager: EntityManager,
 		private readonly metricsService: MetricsService
 	) {
 		this.operations = {
 			[WagerTransactionKind.Refund]: this.refundOperation,
-			[WagerTransactionKind.Rollback]: this.rollbackOperation
+			[WagerTransactionKind.Rollback]: this.rollbackOperation,
+			[WagerTransactionKind.Win]: this.winOperation
 		};
 	}
 
@@ -85,54 +87,52 @@ export class PendingReferenceWorker implements OnApplicationBootstrap, OnApplica
 		this.isProcessing = true;
 
 		try {
-			return await this.entityManager.transactional(async () => {
-				const pendingTransactions = await this.wageringRepository.findPendingReferences(batchSize);
-				if (pendingTransactions.length === 0) return 0;
+			const pendingTransactions = await this.wageringRepository.findPendingReferences(batchSize, now);
+			if (pendingTransactions.length === 0) return 0;
 
-				let resolvedCount = 0;
+			let resolvedCount = 0;
 
-				for (const transaction of pendingTransactions) {
-					try {
-						const resolved = await this.resolvePendingTransaction(transaction, now, ttl);
-						if (resolved) resolvedCount++;
-					} catch (error) {
-						this.logger.error(
-							`Failed to reprocess pending transaction ${transaction.id}: ${(error as Error).message}`,
-							(error as Error).stack,
-							{
-								transactionId: transaction.id,
-								walletId: transaction.walletId,
-								providerId: transaction.providerId
-							}
-						);
-					}
+			for (const transaction of pendingTransactions) {
+				try {
+					const resolved = await this.resolvePendingTransaction(transaction.id, now, ttl);
+					if (resolved) resolvedCount++;
+				} catch (error) {
+					this.logger.error(
+						`Failed to reprocess pending transaction ${transaction.id}: ${(error as Error).message}`,
+						(error as Error).stack,
+						{
+							transactionId: transaction.id,
+							walletId: transaction.walletId,
+							providerId: transaction.providerId
+						}
+					);
 				}
+			}
 
-				return resolvedCount;
-			});
+			return resolvedCount;
 		} finally {
 			this.isProcessing = false;
 		}
 	}
 
-	private async resolvePendingTransaction(transaction: WagerTransaction, now: Date, ttlMs: number): Promise<boolean> {
+	private async resolvePendingTransaction(transactionId: string, now: Date, ttlMs: number): Promise<boolean> {
 		return this.entityManager.transactional(async () => {
-			const backoff = this.backoffAttempts.get(transaction.id);
-			if (backoff && now.getTime() < backoff.nextAttemptAt) return false;
-
-			const currentTransaction = await this.wageringRepository.findById(transaction.id);
+			const currentTransaction = await this.wageringRepository.findById(transactionId);
 			if (!currentTransaction || currentTransaction.status !== WagerTransactionStatus.PendingReference) {
-				this.backoffAttempts.delete(transaction.id);
+				return false;
+			}
+
+			if (currentTransaction.nextAttemptAt && now.getTime() < currentTransaction.nextAttemptAt.getTime()) {
 				return false;
 			}
 
 			const wallet = await this.walletRepository.findByIdWithLock(currentTransaction.walletId);
 			if (!wallet) {
 				currentTransaction.reject('REFERENCE_NOT_FOUND');
+				currentTransaction.recordBalanceAfter(currentTransaction.money);
 				await this.wageringRepository.update(currentTransaction);
 				await this.outboxService.enqueue(currentTransaction);
 				this.metricsService.recordTransaction(currentTransaction.status);
-				this.backoffAttempts.delete(transaction.id);
 				return true;
 			}
 
@@ -147,10 +147,10 @@ export class PendingReferenceWorker implements OnApplicationBootstrap, OnApplica
 
 				if (!reference) {
 					currentTransaction.reject('REFERENCE_NOT_FOUND');
+					currentTransaction.recordBalanceAfter(wallet.balance);
 					await this.wageringRepository.update(currentTransaction);
 					await this.outboxService.enqueue(currentTransaction, wallet);
 					this.metricsService.recordTransaction(currentTransaction.status);
-					this.backoffAttempts.delete(transaction.id);
 					return true;
 				}
 			}
@@ -162,22 +162,18 @@ export class PendingReferenceWorker implements OnApplicationBootstrap, OnApplica
 
 			if (currentTransaction.status === WagerTransactionStatus.PendingReference) {
 				this.metricsService.recordRetry('pending_reference');
-				const attempts = (backoff?.attempts ?? 0) + 1;
-				const delayMs = Math.min(1000 * Math.pow(2, attempts - 1), 60000);
-				this.backoffAttempts.set(transaction.id, {
-					attempts,
-					nextAttemptAt: now.getTime() + delayMs
-				});
+				const delayMs = Math.min(1000 * Math.pow(2, currentTransaction.attempts), 60000);
+				currentTransaction.recordAttempt(new Date(now.getTime() + delayMs));
+				await this.wageringRepository.update(currentTransaction);
 				return false;
 			}
-
-			this.backoffAttempts.delete(transaction.id);
 
 			if (ledgerEntry) {
 				await this.walletRepository.update(wallet);
 				await this.ledgerRepository.create(ledgerEntry);
 			}
 
+			currentTransaction.recordBalanceAfter(wallet.balance);
 			await this.wageringRepository.update(currentTransaction);
 			await this.outboxService.enqueue(currentTransaction, wallet, ledgerEntry);
 			this.metricsService.recordTransaction(currentTransaction.status);
