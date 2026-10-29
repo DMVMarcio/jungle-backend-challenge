@@ -1,11 +1,12 @@
 import { beforeEach, describe, expect, it } from 'bun:test';
 
-import { Money } from '@/shared/domain/money/money';
-import { LedgerDirection, WalletLedgerEntry } from '@/modules/wallet/domain/wallet-ledger-entry';
 import { Wallet } from '@/modules/wallet/domain/wallet';
+import { LedgerDirection, WalletLedgerEntry } from '@/modules/wallet/domain/wallet-ledger-entry';
 import { WalletNotFoundError } from '@/modules/wallet/domain/wallet.errors';
 import { WalletLedgerEntryMemoryRepository } from '@/modules/wallet/infrastructure/database/wallet-ledger-entry.memory.repository';
 import { WalletMemoryRepository } from '@/modules/wallet/infrastructure/database/wallet.memory.repository';
+
+import { Money } from '@/shared/domain/money/money';
 
 import { GetWalletLedgerUseCase } from './get-wallet-ledger.use-case';
 
@@ -21,9 +22,7 @@ describe('GetWalletLedgerUseCase', () => {
 	});
 
 	it('should throw WalletNotFoundError when wallet does not exist', async () => {
-		expect(
-			useCase.execute({ walletId: 'non-existing-wallet-id' })
-		).rejects.toBeInstanceOf(WalletNotFoundError);
+		expect(useCase.execute({ walletId: 'non-existing-wallet-id' })).rejects.toBeInstanceOf(WalletNotFoundError);
 	});
 
 	it('should return empty list when wallet has no ledger entries', async () => {

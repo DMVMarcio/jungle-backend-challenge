@@ -1,12 +1,14 @@
 import { Inject, Injectable, Optional } from '@nestjs/common';
 
 import { RequestContextService } from '@/core/observability/services/request-context.service';
+
 import { OutboxMessage } from '@/modules/outbox/domain/outbox-message';
 import type { IOutboxRepository } from '@/modules/outbox/domain/outbox.repository.interface';
 import { OUTBOX_TOKENS } from '@/modules/outbox/outbox.tokens';
 import { WalletBalanceChanged } from '@/modules/wallet/domain/events/wallet-balance-changed.event';
 import { Wallet } from '@/modules/wallet/domain/wallet';
 import { WalletLedgerEntry } from '@/modules/wallet/domain/wallet-ledger-entry';
+
 import type { IIdGenerator } from '@/shared/ports/id-generator.port';
 import { SHARED_TOKENS } from '@/shared/shared.tokens';
 
@@ -28,11 +30,7 @@ export class WageringOutboxService {
 		private readonly requestContextService?: RequestContextService
 	) {}
 
-	async enqueue(
-		transaction: WagerTransaction,
-		wallet?: Wallet,
-		ledgerEntry?: WalletLedgerEntry
-	): Promise<void> {
+	async enqueue(transaction: WagerTransaction, wallet?: Wallet, ledgerEntry?: WalletLedgerEntry): Promise<void> {
 		const correlationId = this.requestContextService?.getCorrelationId() ?? transaction.id;
 		const causationId = this.requestContextService?.getCausationId();
 

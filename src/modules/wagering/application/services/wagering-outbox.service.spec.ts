@@ -1,10 +1,12 @@
 import { beforeEach, describe, expect, it } from 'bun:test';
 
 import { RequestContextService } from '@/core/observability/services/request-context.service';
+
 import { OutboxMemoryRepository } from '@/modules/outbox/infrastructure/database/outbox.memory.repository';
 import { WagerTransaction, WagerTransactionKind } from '@/modules/wagering/domain/wager-transaction';
 import { Wallet } from '@/modules/wallet/domain/wallet';
 import { LedgerDirection, WalletLedgerEntry } from '@/modules/wallet/domain/wallet-ledger-entry';
+
 import { IdGeneratorUuidAdapter } from '@/shared/adapters/id-generator/id-generator.uuid.adapter';
 import { Money } from '@/shared/domain/money/money';
 

@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'bun:test';
 import { BadRequestException } from '@nestjs/common';
+import { describe, expect, it } from 'bun:test';
 import { z } from 'zod';
 
 import { ZodValidationPipe } from './zod-validation.pipe';

@@ -1,6 +1,7 @@
 import { EntitySchema } from '@mikro-orm/core';
 
 import { MoneyAmountType } from '@/core/database/types/money-amount.type';
+
 import { LedgerDirection } from '@/modules/wallet/domain/wallet-ledger-entry';
 
 export interface WalletLedgerEntryDbRecord {

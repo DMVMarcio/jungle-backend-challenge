@@ -11,10 +11,12 @@ import { MetricsService } from '@/core/observability/services/metrics.service';
 import { RequestContextService } from '@/core/observability/services/request-context.service';
 import { settings } from '@/core/settings';
 import { SqsClientService } from '@/core/sqs/sqs-client.service';
+
 import type { IInboxRepository } from '@/modules/inbox/domain/inbox.repository.interface';
 import { INBOX_TOKENS } from '@/modules/inbox/inbox.tokens';
 import { IdempotencyConflictError } from '@/modules/wagering/domain/wagering.errors';
 import { WalletNotFoundError, WalletOwnershipError } from '@/modules/wallet/domain/wallet.errors';
+
 import { CurrencyMismatchError } from '@/shared/domain/money/money.errors';
 
 import { ProcessWagerTransactionUseCase } from '../../application/use-cases/process-wager-transaction.use-case';

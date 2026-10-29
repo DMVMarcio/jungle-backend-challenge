@@ -1,7 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 
-import type { IWalletRepository } from '@/modules/wallet/domain/wallet.repository.interface';
 import type { IWalletLedgerEntryRepository } from '@/modules/wallet/domain/wallet-ledger-entry.repository.interface';
+import type { IWalletRepository } from '@/modules/wallet/domain/wallet.repository.interface';
 import { WALLET_TOKENS } from '@/modules/wallet/wallet.tokens';
 
 import { WalletNotFoundError } from '../../domain/wallet.errors';

@@ -3,6 +3,7 @@ import { Inject, Injectable, Logger, type OnApplicationBootstrap, type OnApplica
 
 import { MetricsService } from '@/core/observability/services/metrics.service';
 import { settings } from '@/core/settings';
+
 import type { IWalletLedgerEntryRepository } from '@/modules/wallet/domain/wallet-ledger-entry.repository.interface';
 import type { IWalletRepository } from '@/modules/wallet/domain/wallet.repository.interface';
 import { WALLET_TOKENS } from '@/modules/wallet/wallet.tokens';

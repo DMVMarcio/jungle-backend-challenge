@@ -2,6 +2,7 @@ import { EntityManager } from '@mikro-orm/postgresql';
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 
 import { MetricsService } from '@/core/observability/services/metrics.service';
+
 import { InboxMessage } from '@/modules/inbox/domain/inbox-message';
 import type { IInboxRepository } from '@/modules/inbox/domain/inbox.repository.interface';
 import { INBOX_TOKENS } from '@/modules/inbox/inbox.tokens';
@@ -20,6 +21,7 @@ import type { IWalletLedgerEntryRepository } from '@/modules/wallet/domain/walle
 import { WalletNotFoundError, WalletOwnershipError } from '@/modules/wallet/domain/wallet.errors';
 import type { IWalletRepository } from '@/modules/wallet/domain/wallet.repository.interface';
 import { WALLET_TOKENS } from '@/modules/wallet/wallet.tokens';
+
 import { Money } from '@/shared/domain/money/money';
 import { CurrencyMismatchError } from '@/shared/domain/money/money.errors';
 import type { IIdGenerator } from '@/shared/ports/id-generator.port';
@@ -183,12 +185,9 @@ export class ProcessWagerTransactionUseCase {
 			this.entityManager.clear?.();
 
 			const databaseException = error as
-				| { code?: string; name?: string; constraint?: string; detail?: string }
-				| null
-				| undefined;
+				{ code?: string; name?: string; constraint?: string; detail?: string } | null | undefined;
 			const isUniqueViolation =
-				databaseException?.code === '23505' ||
-				databaseException?.name === 'UniqueConstraintViolationException';
+				databaseException?.code === '23505' || databaseException?.name === 'UniqueConstraintViolationException';
 
 			if (isUniqueViolation) {
 				this.metricsService.recordLockConflict();
@@ -345,7 +344,11 @@ export class ProcessWagerTransactionUseCase {
 		return wallet;
 	}
 
-	private createTransaction(input: ProcessWagerTransactionInput, money: Money, payloadHash: string): WagerTransaction {
+	private createTransaction(
+		input: ProcessWagerTransactionInput,
+		money: Money,
+		payloadHash: string
+	): WagerTransaction {
 		const id = this.idGenerator.generate();
 		return WagerTransaction.create({
 			id,

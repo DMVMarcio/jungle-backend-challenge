@@ -21,7 +21,9 @@ export class Money {
 		const amount = props?.amount?.trim();
 
 		if (!amount || !this.AMOUNT_REGEX.test(amount))
-			throw new InvalidMoneyError(`Amount '${props?.amount}' must be a decimal string with 2 fixed decimal places`);
+			throw new InvalidMoneyError(
+				`Amount '${props?.amount}' must be a decimal string with 2 fixed decimal places`
+			);
 
 		return new Money(new Decimal(amount), currency);
 	}

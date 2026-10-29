@@ -38,10 +38,7 @@ describe('Database Constraints', () => {
 		await RequestContext.create(entityManager, async () => {
 			const connection = entityManager.getConnection();
 			expect(
-				connection.execute(
-					`UPDATE wallet_ledger_entries SET amount = 999.00 WHERE wallet_id = ?`,
-					[wallet.id]
-				)
+				connection.execute(`UPDATE wallet_ledger_entries SET amount = 999.00 WHERE wallet_id = ?`, [wallet.id])
 			).rejects.toThrow(/append-only/i);
 		});
 	});
@@ -58,10 +55,7 @@ describe('Database Constraints', () => {
 		await RequestContext.create(entityManager, async () => {
 			const connection = entityManager.getConnection();
 			expect(
-				connection.execute(
-					`DELETE FROM wallet_ledger_entries WHERE wallet_id = ?`,
-					[wallet.id]
-				)
+				connection.execute(`DELETE FROM wallet_ledger_entries WHERE wallet_id = ?`, [wallet.id])
 			).rejects.toThrow(/append-only/i);
 		});
 	});

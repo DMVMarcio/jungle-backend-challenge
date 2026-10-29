@@ -7,6 +7,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'bun:test';
 
 import { settings } from '@/core/settings';
 import { SqsClientService } from '@/core/sqs/sqs-client.service';
+
 import { OutboxPublisherWorker } from '@/modules/outbox/infrastructure/workers/outbox-publisher.worker';
 import { ProcessWagerTransactionUseCase } from '@/modules/wagering/application/use-cases/process-wager-transaction.use-case';
 import { WagerTransactionKind, WagerTransactionStatus } from '@/modules/wagering/domain/wager-transaction';

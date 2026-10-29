@@ -2,10 +2,12 @@ import { EntityManager } from '@mikro-orm/postgresql';
 import { beforeEach, describe, expect, it } from 'bun:test';
 
 import { RequestContextService } from '@/core/observability/services/request-context.service';
+
 import { OutboxMemoryRepository } from '@/modules/outbox/infrastructure/database/outbox.memory.repository';
 import { WageringOutboxService } from '@/modules/wagering/application/services/wagering-outbox.service';
 import { WagerTransactionKind, WagerTransactionStatus } from '@/modules/wagering/domain/wager-transaction';
 import { WagerTransactionMemoryRepository } from '@/modules/wagering/infrastructure/database/wager-transaction.memory.repository';
+
 import { IdGeneratorUuidAdapter } from '@/shared/adapters/id-generator/id-generator.uuid.adapter';
 
 import { LedgerDirection } from '../../domain/wallet-ledger-entry';

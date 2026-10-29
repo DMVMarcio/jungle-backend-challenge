@@ -1,5 +1,6 @@
 import { Wallet } from '@/modules/wallet/domain/wallet';
 import { LedgerDirection, WalletLedgerEntry } from '@/modules/wallet/domain/wallet-ledger-entry';
+
 import { IntegrationEvent, IntegrationEventProps } from '@/shared/domain/events/integration-event';
 import { MoneyProps } from '@/shared/domain/money/money';
 

@@ -12,6 +12,7 @@ import { beforeEach, describe, expect, it, mock, spyOn } from 'bun:test';
 import { MetricsService } from '@/core/observability/services/metrics.service';
 import { RequestContextService } from '@/core/observability/services/request-context.service';
 import type { SqsClientService } from '@/core/sqs/sqs-client.service';
+
 import { InboxMessage } from '@/modules/inbox/domain/inbox-message';
 import { InboxMemoryRepository } from '@/modules/inbox/infrastructure/database/inbox.memory.repository';
 import { WalletNotFoundError } from '@/modules/wallet/domain/wallet.errors';

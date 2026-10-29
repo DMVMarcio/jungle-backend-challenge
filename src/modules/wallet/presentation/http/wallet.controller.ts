@@ -4,6 +4,7 @@ import { CreateWalletUseCase } from '@/modules/wallet/application/use-cases/crea
 import { GetWalletLedgerUseCase } from '@/modules/wallet/application/use-cases/get-wallet-ledger.use-case';
 import { GetWalletUseCase } from '@/modules/wallet/application/use-cases/get-wallet.use-case';
 import { ReconcileWalletUseCase } from '@/modules/wallet/application/use-cases/reconcile-wallet.use-case';
+
 import { ZodValidationPipe } from '@/shared/presentation/http/pipes/zod-validation.pipe';
 
 import { type CreateWalletDto, createWalletSchema } from './dto/create-wallet.dto';

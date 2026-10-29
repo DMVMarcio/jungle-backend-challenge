@@ -2,6 +2,7 @@ import { Logger } from '@nestjs/common';
 import { beforeEach, describe, expect, it, spyOn } from 'bun:test';
 
 import { MetricsService } from '@/core/observability/services/metrics.service';
+
 import { Wallet } from '@/modules/wallet/domain/wallet';
 import { LedgerDirection, WalletLedgerEntry } from '@/modules/wallet/domain/wallet-ledger-entry';
 import { WalletNotFoundError } from '@/modules/wallet/domain/wallet.errors';
@@ -111,7 +112,10 @@ describe('ReconcileWalletUseCase', () => {
 		expect(result.difference).toEqual({ amount: '50.00', currency: 'BRL' });
 		expect(result.checkedEntries).toBe(1);
 		expect(metricsService.getSnapshot().reconciliationDiscrepancies).toBe(1);
-		expect(warnSpy).toHaveBeenCalledWith('Wallet reconciliation discrepancy detected', expect.objectContaining({ walletId: 'wallet-1' }));
+		expect(warnSpy).toHaveBeenCalledWith(
+			'Wallet reconciliation discrepancy detected',
+			expect.objectContaining({ walletId: 'wallet-1' })
+		);
 
 		warnSpy.mockRestore();
 	});

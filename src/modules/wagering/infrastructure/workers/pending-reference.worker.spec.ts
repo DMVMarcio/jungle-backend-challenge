@@ -2,6 +2,7 @@ import { EntityManager } from '@mikro-orm/postgresql';
 import { beforeEach, describe, expect, it } from 'bun:test';
 
 import { MetricsService } from '@/core/observability/services/metrics.service';
+
 import { OutboxMemoryRepository } from '@/modules/outbox/infrastructure/database/outbox.memory.repository';
 import {
 	WagerTransaction,

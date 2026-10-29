@@ -2,9 +2,14 @@ import { EntityManager } from '@mikro-orm/postgresql';
 import { beforeEach, describe, expect, it } from 'bun:test';
 
 import { MetricsService } from '@/core/observability/services/metrics.service';
+
 import { InboxMemoryRepository } from '@/modules/inbox/infrastructure/database/inbox.memory.repository';
 import { OutboxMemoryRepository } from '@/modules/outbox/infrastructure/database/outbox.memory.repository';
-import { WagerTransaction, WagerTransactionKind, WagerTransactionStatus } from '@/modules/wagering/domain/wager-transaction';
+import {
+	WagerTransaction,
+	WagerTransactionKind,
+	WagerTransactionStatus
+} from '@/modules/wagering/domain/wager-transaction';
 import { IdempotencyConflictError } from '@/modules/wagering/domain/wagering.errors';
 import { WagerTransactionMemoryRepository } from '@/modules/wagering/infrastructure/database/wager-transaction.memory.repository';
 import { Wallet } from '@/modules/wallet/domain/wallet';
@@ -587,7 +592,9 @@ describe('ProcessWagerTransactionUseCase', () => {
 		wageringRepository.create = async (tx: WagerTransaction) => {
 			if (!threw) {
 				threw = true;
-				const error = new Error('duplicate key value violates unique constraint uq_wager_tx_single_reversal') as Error & {
+				const error = new Error(
+					'duplicate key value violates unique constraint uq_wager_tx_single_reversal'
+				) as Error & {
 					code: string;
 					constraint: string;
 				};

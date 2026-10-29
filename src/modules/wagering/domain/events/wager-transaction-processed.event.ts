@@ -1,4 +1,5 @@
 import { WagerTransactionKind } from '@/modules/wagering/domain/wager-transaction';
+
 import { IntegrationEvent, IntegrationEventProps } from '@/shared/domain/events/integration-event';
 import { MoneyProps } from '@/shared/domain/money/money';
 

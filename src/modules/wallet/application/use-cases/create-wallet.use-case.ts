@@ -2,13 +2,14 @@ import { EntityManager } from '@mikro-orm/postgresql';
 import { Inject, Injectable, Optional } from '@nestjs/common';
 
 import { RequestContextService } from '@/core/observability/services/request-context.service';
+
 import { OutboxMessage } from '@/modules/outbox/domain/outbox-message';
 import type { IOutboxRepository } from '@/modules/outbox/domain/outbox.repository.interface';
 import { OUTBOX_TOKENS } from '@/modules/outbox/outbox.tokens';
+import { WageringOutboxService } from '@/modules/wagering/application/services/wagering-outbox.service';
 import { WagerTransactionProcessed } from '@/modules/wagering/domain/events/wager-transaction-processed.event';
 import { WagerTransaction, WagerTransactionKind } from '@/modules/wagering/domain/wager-transaction';
 import type { IWagerTransactionRepository } from '@/modules/wagering/domain/wager-transaction.repository.interface';
-import { WageringOutboxService } from '@/modules/wagering/application/services/wagering-outbox.service';
 import { WAGERING_TOKENS } from '@/modules/wagering/wagering.tokens';
 import { WalletBalanceChanged } from '@/modules/wallet/domain/events/wallet-balance-changed.event';
 import { Wallet } from '@/modules/wallet/domain/wallet';
@@ -17,6 +18,7 @@ import type { IWalletLedgerEntryRepository } from '@/modules/wallet/domain/walle
 import { WalletAlreadyExistsError } from '@/modules/wallet/domain/wallet.errors';
 import type { IWalletRepository } from '@/modules/wallet/domain/wallet.repository.interface';
 import { WALLET_TOKENS } from '@/modules/wallet/wallet.tokens';
+
 import { Money } from '@/shared/domain/money/money';
 import type { IIdGenerator } from '@/shared/ports/id-generator.port';
 import { SHARED_TOKENS } from '@/shared/shared.tokens';
